@@ -1,0 +1,6 @@
+{
+  "name": "GMB NET",
+  "description": "GMB NET secure VPN tunnel application with real-time connectivity status, subscription management, and cyber UI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
