@@ -34,6 +34,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.example.vpn.VpnStatus
 import com.example.viewmodel.LoginState
 import com.example.viewmodel.VpnViewModel
@@ -48,8 +51,26 @@ fun MainScreen(
     onNavigateToPurchase: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val activeSession by viewModel.activeSession.collectAsState()
     val loginState by viewModel.loginState.collectAsState()
+
+    // Battery optimization exemption state with auto-refresh on app resume
+    var isBatteryExempt by remember { 
+        mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)) 
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isBatteryExempt = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // Retrieve live VPN service details
     val status by viewModel.connectionStatus.collectAsState()
@@ -132,34 +153,17 @@ fun MainScreen(
         label = "aura_color"
     )
 
-    // Pulsing halo animation
+    // Pulsing halo animation for connecting status
     val infiniteTransition = rememberInfiniteTransition(label = "halo_transition")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.25f,
-        targetValue = 0.75f,
+        targetValue = 0.65f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse_alpha"
     )
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_scale"
-    )
-
-    val currentAuraAlpha = when {
-        isExpired -> 0.35f
-        status == VpnStatus.CONNECTING -> pulseAlpha
-        status == VpnStatus.CONNECTED -> 0.45f
-        status == VpnStatus.ERROR -> 0.40f
-        else -> 0f
-    }
 
     Scaffold(
         containerColor = deepNavyBg,
@@ -245,23 +249,11 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.radialGradient(
-                        colors = if (isExpired) {
-                            listOf(
-                                neonRed.copy(alpha = 0.18f),
-                                Color(0xFF130910),
-                                deepNavyBg
-                            )
-                        } else if (status != VpnStatus.DISCONNECTED) {
-                            listOf(
-                                auraColor.copy(alpha = currentAuraAlpha * 0.35f),
-                                auraColor.copy(alpha = currentAuraAlpha * 0.10f),
-                                deepNavyBg
-                            )
-                        } else {
-                            listOf(Color(0xFF111D36), deepNavyBg)
-                        },
-                        radius = 1100f
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF0F172A),
+                            deepNavyBg
+                        )
                     )
                 )
                 .padding(innerPadding)
@@ -423,13 +415,17 @@ fun MainScreen(
                     // Outer Glow Halo
                     Box(
                         modifier = Modifier
-                            .size(if (status == VpnStatus.CONNECTING) (190.dp * pulseScale) else 186.dp)
+                            .size(186.dp)
                             .clip(CircleShape)
                             .background(
                                 if (isExpired) {
                                     neonRed.copy(alpha = 0.15f)
-                                } else if (status != VpnStatus.DISCONNECTED) {
-                                    auraColor.copy(alpha = currentAuraAlpha * 0.25f)
+                                } else if (status == VpnStatus.CONNECTING) {
+                                    neonYellow.copy(alpha = pulseAlpha * 0.25f)
+                                } else if (status == VpnStatus.CONNECTED) {
+                                    neonGreen.copy(alpha = 0.20f)
+                                } else if (status == VpnStatus.ERROR) {
+                                    neonRed.copy(alpha = 0.20f)
                                 } else {
                                     Color.Transparent
                                 }
@@ -764,151 +760,30 @@ fun MainScreen(
                     }
                 }
 
-                // 6. In-App Version & Update Card
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(20.dp)),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0F1D)),
-                    shape = RoundedCornerShape(20.dp)
+                // Battery Optimization & Background Stability Card (Xiaomi, Samsung, Huawei, etc.)
+                AnimatedVisibility(
+                    visible = !isBatteryExempt,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
                 ) {
-                    Column(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(20.dp)),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0F1D)),
+                        shape = RoundedCornerShape(20.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            if (isCheckingUpdate) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = brandCyan,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                OutlinedButton(
-                                    onClick = {
-                                        viewModel.checkForAppUpdates(currentVersionCode = 1, isManual = true)
-                                    },
-                                    border = BorderStroke(1.dp, brandCyan.copy(alpha = 0.5f)),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "بررسی نسخه",
-                                        color = brandCyan,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "نسخه برنامه: ۱.۰.۰",
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = if (availableUpdate != null) "نسخه جدید ${availableUpdate?.latestVersionName} آماده دانلود" else "بروزرسانی مستقیم از داخل برنامه",
-                                        color = if (availableUpdate != null) neonOrange else Color(0xFF64748B),
-                                        fontSize = 10.sp
-                                    )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .background(brandCyan.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.SystemUpdate,
-                                        contentDescription = null,
-                                        tint = if (availableUpdate != null) neonOrange else brandCyan,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Test simulation link for user preview
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TextButton(
-                                onClick = { viewModel.triggerSimulatedUpdateForTesting() },
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text(
-                                    text = "تست و پیش‌نمایش دیالوگ بروزرسانی",
-                                    color = Color(0xFF64748B),
-                                    fontSize = 11.sp
-                                )
-                            }
-                            if (availableUpdate != null) {
-                                Button(
-                                    onClick = { /* dialog auto appears */ },
-                                    colors = ButtonDefaults.buttonColors(containerColor = neonOrange),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                ) {
-                                    Text("مشاهده بروزرسانی", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 7. Battery Optimization & Background Stability Card (Xiaomi, Samsung, Huawei, etc.)
-                var isBatteryExempt by remember { 
-                    mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)) 
-                }
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(20.dp)),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0F1D)),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (isBatteryExempt) {
-                                Surface(
-                                    color = neonGreen.copy(alpha = 0.15f),
-                                    shape = RoundedCornerShape(8.dp),
-                                    border = BorderStroke(1.dp, neonGreen.copy(alpha = 0.4f))
-                                ) {
-                                    Text(
-                                        text = "پایداری ۱۰۰٪ فعال",
-                                        color = neonGreen,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            } else {
                                 Button(
                                     onClick = {
                                         BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
@@ -925,80 +800,80 @@ fun MainScreen(
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
-                            }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "پایداری پس‌زمینه و مصرف بهینه",
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = if (isBatteryExempt) "سازگار با سامسونگ، شیائومی، هواوی" else "جلوگیری از قطع اتصال هنگام خاموشی صفحه",
-                                        color = if (isBatteryExempt) Color(0xFF94A3B8) else neonOrange,
-                                        fontSize = 10.sp
-                                    )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .background(neonGreen.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
-                                    contentAlignment = Alignment.Center
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.BatteryChargingFull,
-                                        contentDescription = null,
-                                        tint = neonGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = "پایداری پس‌زمینه و مصرف بهینه",
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "جلوگیری از قطع اتصال هنگام خاموشی صفحه",
+                                            color = neonOrange,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .background(neonGreen.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.BatteryChargingFull,
+                                            contentDescription = null,
+                                            tint = neonGreen,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        // Feature explanation tags
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                color = Color(0xFF1E293B),
-                                shape = RoundedCornerShape(6.dp)
+                            // Feature explanation tags
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "MTU ۱۴۰۰ ضدافت‌سرعت",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 9.sp,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                            Surface(
-                                color = Color(0xFF1E293B),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    text = "پردازش کم‌مصرف CPU",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 9.sp,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                            Surface(
-                                color = Color(0xFF1E293B),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    text = "سازگار با اندروید ۷ تا ۱۵",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 9.sp,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                                Surface(
+                                    color = Color(0xFF1E293B),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "MTU ۱۴۰۰ ضدافت‌سرعت",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 9.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Surface(
+                                    color = Color(0xFF1E293B),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "پردازش کم‌مصرف CPU",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 9.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Surface(
+                                    color = Color(0xFF1E293B),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "سازگار با اندروید ۷ تا ۱۵",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 9.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
                         }
                     }

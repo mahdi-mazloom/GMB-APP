@@ -30,14 +30,17 @@ object AppUpdateManager {
     private const val TAG = "AppUpdateManager"
 
     // GitHub repository configuration:
-    // Simply change githubOwner and githubRepo to your GitHub username and repository name!
-    var githubOwner = "programmercop45"
-    var githubRepo = "gmb-net"
+    var githubOwner = "mahdi-mazloom"
+    var githubRepo = "GMB-APP"
     var githubBranch = "main"
 
     // Primary: GitHub Raw URL (High speed, zero API rate limits)
     val GITHUB_RAW_VERSION_URL: String
         get() = "https://raw.githubusercontent.com/$githubOwner/$githubRepo/$githubBranch/version.json"
+
+    // GitHub Releases API URL (Supports standard GitHub Releases with attached APK assets)
+    val GITHUB_RELEASES_URL: String
+        get() = "https://api.github.com/repos/$githubOwner/$githubRepo/releases/latest"
 
     // Backup / Custom server URL
     private const val DEFAULT_VERSION_URL = "https://mahdis-net.ir/api/app_version.json"
@@ -55,19 +58,24 @@ object AppUpdateManager {
         customUrl: String? = null
     ): Result<AppUpdateInfo?> = withContext(Dispatchers.IO) {
         try {
-            // First priority: customUrl, then GitHub Raw URL, then default domain URL
+            // First priority: customUrl, then GitHub Raw URL
             val targetUrl = customUrl?.takeIf { it.isNotBlank() } 
                 ?: GITHUB_RAW_VERSION_URL
 
             val request = Request.Builder()
                 .url(targetUrl)
                 .header("User-Agent", "GMB-NET-Android")
+                .header("Accept", "application/vnd.github.v3+json, application/json")
                 .build()
 
             val response = httpClient.newCall(request).execute()
             if (!response.isSuccessful) {
-                // If GitHub raw returned 404, try fallback server URL
-                if (targetUrl != DEFAULT_VERSION_URL) {
+                // If GitHub raw version.json returned 404, fallback to GitHub Releases API
+                if (targetUrl == GITHUB_RAW_VERSION_URL) {
+                    return@withContext checkUpdate(currentVersionCode, GITHUB_RELEASES_URL)
+                }
+                // If GitHub Releases also failed, fallback to domain URL
+                if (targetUrl == GITHUB_RELEASES_URL) {
                     return@withContext checkUpdate(currentVersionCode, DEFAULT_VERSION_URL)
                 }
                 return@withContext Result.success(null)
@@ -88,11 +96,23 @@ object AppUpdateManager {
                 val tagName = json.optString("tag_name", "").removePrefix("v")
                 latestName = tagName
                 latestCode = tagName.replace(".", "").toIntOrNull() ?: (currentVersionCode + 1)
-                changelog = json.optString("body", "بهبود عملکرد و رفع اشکالات برنامه")
+                changelog = json.optString("body", "• بهبود عملکرد و سرعت برنامه\n• بهینه‌سازی ارتباط و رفع اشکالات")
                 val assets = json.optJSONArray("assets")
                 if (assets != null && assets.length() > 0) {
-                    val firstAsset = assets.getJSONObject(0)
-                    downloadUrl = firstAsset.optString("browser_download_url", "")
+                    // Try to find an .apk asset first, otherwise use the first asset
+                    var foundApk = false
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.getJSONObject(i)
+                        val name = asset.optString("name", "")
+                        if (name.endsWith(".apk", ignoreCase = true)) {
+                            downloadUrl = asset.optString("browser_download_url", "")
+                            foundApk = true
+                            break
+                        }
+                    }
+                    if (!foundApk) {
+                        downloadUrl = assets.getJSONObject(0).optString("browser_download_url", "")
+                    }
                 }
             }
 

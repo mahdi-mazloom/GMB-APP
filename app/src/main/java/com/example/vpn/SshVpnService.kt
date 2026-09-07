@@ -246,7 +246,7 @@ class SshVpnService : VpnService() {
         try {
             val builder = Builder()
                 .setSession("GMB NET - $host")
-                .setMtu(1400) // MTU 1400 prevents mobile carrier (MCI/Irancell/Rightel) fragmentation & packet drops
+                .setMtu(1500) // 1500 MTU guarantees full standard IP packet support for TLS/HTTPS
                 .addAddress("10.0.0.2", 24)
                 .addDnsServer("8.8.8.8")
                 .addDnsServer("1.1.1.1")

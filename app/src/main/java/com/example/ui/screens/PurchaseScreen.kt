@@ -16,6 +16,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,12 +34,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.database.AppDatabase
+import com.example.data.database.UserSession
 import com.example.util.PersianDateHelper
 import com.example.viewmodel.VpnViewModel
 import kotlinx.coroutines.launch
@@ -89,6 +93,21 @@ fun PurchaseScreen(
 
     // Payment tab state: 0 = Telegram / Card to Card, 1 = USDT Crypto
     var paymentTab by remember { mutableIntStateOf(0) }
+
+    // Modal bottom sheet state - ALWAYS skip partially expanded so it opens FULLY and never halfway!
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Receipt & tracking state
+    var trackingCode by remember { mutableStateOf("") }
+    var senderCardLast4 by remember { mutableStateOf("") }
+    var cardCopied by remember { mutableStateOf(false) }
+    var shabaCopied by remember { mutableStateOf(false) }
+    var amountTomanCopied by remember { mutableStateOf(false) }
+    var amountRialCopied by remember { mutableStateOf(false) }
+
+    // Direct checkout user info: English username and phone number
+    var checkoutUsername by remember(activeSession) { mutableStateOf(activeSession?.username ?: "") }
+    var checkoutPhone by remember { mutableStateOf("") }
 
     // Modern cyber palette matching GMB NET design
     val deepNavyBg = Color(0xFF070B14)
@@ -387,10 +406,16 @@ fun PurchaseScreen(
                         neonGreen = neonGreen,
                         onSelect = {
                             selectedPlan = plan
-                            // Reset coupon when choosing a new plan
+                            // Reset coupon & payment states when choosing a new plan
                             couponCode = ""
                             appliedDiscountPercent = 0
                             couponMessage = null
+                            trackingCode = ""
+                            senderCardLast4 = ""
+                            cardCopied = false
+                            shabaCopied = false
+                            amountTomanCopied = false
+                            amountRialCopied = false
                         }
                     )
                 }
@@ -480,7 +505,7 @@ fun PurchaseScreen(
             }
 
             // ==========================================
-            // 5. MODERN CHECKOUT BOTTOM SHEET
+            // 5. FULL-HEIGHT MODERN CHECKOUT BOTTOM SHEET
             // ==========================================
             if (selectedPlan != null) {
                 val plan = selectedPlan!!
@@ -489,6 +514,7 @@ fun PurchaseScreen(
                 val discountAmount = (plan.rawPriceToman * appliedDiscountPercent) / 100
                 val finalPayableToman = plan.rawPriceToman - discountAmount
                 val finalPriceFormatted = NumberFormat.getNumberInstance(Locale.US).format(finalPayableToman) + " تومان"
+                val finalPriceRialFormatted = NumberFormat.getNumberInstance(Locale.US).format(finalPayableToman * 10) + " ریال"
 
                 // Calculate new expiry date based on current session
                 val currentRemainingDays = activeSession?.remainingDays?.coerceAtLeast(0) ?: 0
@@ -497,79 +523,144 @@ fun PurchaseScreen(
 
                 ModalBottomSheet(
                     onDismissRequest = { selectedPlan = null },
-                    containerColor = Color(0xFF0C1424),
-                    scrimColor = Color.Black.copy(alpha = 0.75f),
+                    sheetState = sheetState,
+                    containerColor = Color(0xFF0A0F1D),
+                    scrimColor = Color.Black.copy(alpha = 0.85f),
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                     dragHandle = {
-                        Box(
+                        Column(
                             modifier = Modifier
-                                .padding(vertical = 12.dp)
-                                .width(42.dp)
-                                .height(4.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF334155))
-                        )
-                    }
+                                .fillMaxWidth()
+                                .padding(top = 10.dp, bottom = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(48.dp)
+                                    .height(5.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF334155))
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxHeight(0.96f)
                 ) {
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(horizontal = 18.dp)
+                            .navigationBarsPadding()
+                            .padding(bottom = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        // Header Title
+                        // Header Title & Close Button
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = { selectedPlan = null }) {
+                            IconButton(
+                                onClick = { selectedPlan = null },
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF162032))
+                                    .size(36.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "بستن",
-                                    tint = Color(0xFF94A3B8)
+                                    tint = Color(0xFF94A3B8),
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
 
-                            Text(
-                                text = "پیش‌فاکتور و تمدید اشتراک",
-                                color = Color.White,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "پیش‌فاکتور و تمدید اشتراک",
+                                    color = Color.White,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "پرداخت شتابی امن و شارژ آنی حساب",
+                                    color = Color(0xFF64748B),
+                                    fontSize = 11.sp
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(brandCyan.copy(alpha = 0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = plan.duration.substringBefore(" "),
+                                    color = brandCyan,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
 
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            color = borderStroke
-                        )
-
-                        // Invoice Summary Card
+                        // ==========================================
+                        // INVOICE SUMMARY CARD
+                        // ==========================================
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(16.dp)),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF111C33)),
-                            shape = RoundedCornerShape(16.dp)
+                                .border(
+                                    1.dp,
+                                    Brush.horizontalGradient(
+                                        listOf(
+                                            Color(0xFF1E2E4A),
+                                            brandCyan.copy(alpha = 0.4f),
+                                            Color(0xFF1E2E4A)
+                                        )
+                                    ),
+                                    RoundedCornerShape(18.dp)
+                                ),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F182B)),
+                            shape = RoundedCornerShape(18.dp)
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
+                                // Plan Row
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = plan.title,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(brandPurple.copy(alpha = 0.2f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "${plan.days} روزه",
+                                                color = brandPurple,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Text(
+                                            text = plan.title,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
                                     Text(
                                         text = "پلن انتخابی:",
                                         color = Color(0xFF94A3B8),
@@ -577,61 +668,223 @@ fun PurchaseScreen(
                                     )
                                 }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                // User Account & Delivery Information
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(14.dp)),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0C1424)),
+                                    shape = RoundedCornerShape(14.dp)
                                 ) {
-                                    Text(
-                                        text = activeSession?.username ?: "حساب کاربری فعلی",
-                                        color = brandCyan,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.sp
-                                    )
-                                    Text(
-                                        text = "تمدید برای حساب:",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 12.sp
-                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                color = neonGreen.copy(alpha = 0.15f),
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "تحویل آنی ۲۴ ساعته",
+                                                    color = neonGreen,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = "مشخصات تحویل اشتراک:",
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        // Username (English only)
+                                        OutlinedTextField(
+                                            value = checkoutUsername,
+                                            onValueChange = { input ->
+                                                checkoutUsername = input.filter { ch -> 
+                                                    (ch in 'a'..'z') || (ch in 'A'..'Z') || (ch in '0'..'9') || ch == '_' 
+                                                }
+                                            },
+                                            label = { Text("نام کاربری به انگلیسی", fontSize = 11.sp) },
+                                            placeholder = { Text("مثال: user123", color = Color(0xFF475569), fontSize = 11.sp) },
+                                            singleLine = true,
+                                            textStyle = androidx.compose.ui.text.TextStyle(
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                textAlign = TextAlign.Left
+                                            ),
+                                            supportingText = {
+                                                Text(
+                                                    text = if (checkoutUsername.length < 3) "حداقل ۳ حرف و فقط حروف انگلیسی و اعداد" else "✓ نام کاربری به انگلیسی وارد شد",
+                                                    color = if (checkoutUsername.length < 3) Color(0xFFF59E0B) else neonGreen,
+                                                    fontSize = 10.sp
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Person,
+                                                    contentDescription = null,
+                                                    tint = brandCyan,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = brandCyan,
+                                                unfocusedBorderColor = Color(0xFF1E2E4A),
+                                                focusedContainerColor = Color(0xFF080D1A),
+                                                unfocusedContainerColor = Color(0xFF080D1A)
+                                            ),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        // Phone Number (Iranian mobile)
+                                        OutlinedTextField(
+                                            value = checkoutPhone,
+                                            onValueChange = { input ->
+                                                checkoutPhone = input.filter { it.isDigit() }.take(11)
+                                            },
+                                            label = { Text("شماره تلفن همراه (جهت ارسال پیامک و تحویل)", fontSize = 11.sp) },
+                                            placeholder = { Text("مثال: ۰۹۱۲۳۴۵۶۷۸۹", color = Color(0xFF475569), fontSize = 11.sp) },
+                                            singleLine = true,
+                                            textStyle = androidx.compose.ui.text.TextStyle(
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                textAlign = TextAlign.Left
+                                            ),
+                                            supportingText = {
+                                                val isPhoneValid = checkoutPhone.startsWith("09") && checkoutPhone.length == 11
+                                                Text(
+                                                    text = if (isPhoneValid) "✓ شماره همراه تایید شد" else "شماره ۱۱ رقمی شروع با ۰۹ جهت دریافت پیامک مشخصات",
+                                                    color = if (isPhoneValid) neonGreen else Color(0xFF94A3B8),
+                                                    fontSize = 10.sp
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.PhoneAndroid,
+                                                    contentDescription = null,
+                                                    tint = brandCyan,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = brandCyan,
+                                                unfocusedBorderColor = Color(0xFF1E2E4A),
+                                                focusedContainerColor = Color(0xFF080D1A),
+                                                unfocusedContainerColor = Color(0xFF080D1A)
+                                            ),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                // Visual Expiry Transition Box
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0xFF090E1A))
+                                        .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
                                 ) {
-                                    Text(
-                                        text = "$newShamsiExpiryDate ($newTotalDays روز)",
-                                        color = neonGreen,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
-                                    Text(
-                                        text = "تاریخ پایان جدید:",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 12.sp
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // New expiry
+                                        Column(horizontalAlignment = Alignment.Start) {
+                                            Text(
+                                                text = "تاریخ پایان جدید:",
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 10.sp
+                                            )
+                                            Text(
+                                                text = "$newShamsiExpiryDate ($newTotalDays روز)",
+                                                color = neonGreen,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = null,
+                                            tint = Color(0xFF64748B),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+
+                                        // Current expiry
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = "اعتبار فعلی:",
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 10.sp
+                                            )
+                                            Text(
+                                                text = if (currentRemainingDays <= 0) "منقضی شده" else "$currentRemainingDays روز",
+                                                color = if (currentRemainingDays <= 0) neonRed else Color(0xFFCBD5E1),
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
                                 }
 
-                                HorizontalDivider(color = Color(0xFF1E2E4A).copy(alpha = 0.6f))
+                                HorizontalDivider(color = Color(0xFF1E2E4A).copy(alpha = 0.8f))
 
+                                // Pricing Row
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column {
+                                    Column(horizontalAlignment = Alignment.Start) {
                                         if (appliedDiscountPercent > 0) {
-                                            Text(
-                                                text = plan.price,
-                                                color = Color(0xFF64748B),
-                                                fontSize = 12.sp,
-                                                textDecoration = TextDecoration.LineThrough
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(neonGreen.copy(alpha = 0.2f))
+                                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "$appliedDiscountPercent٪ تخفیف",
+                                                        color = neonGreen,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                                Text(
+                                                    text = plan.price,
+                                                    color = Color(0xFF64748B),
+                                                    fontSize = 12.sp,
+                                                    textDecoration = TextDecoration.LineThrough
+                                                )
+                                            }
                                         }
                                         Text(
                                             text = finalPriceFormatted,
                                             color = brandGold,
                                             fontWeight = FontWeight.Black,
-                                            fontSize = 16.sp
+                                            fontSize = 18.sp
                                         )
                                     }
 
@@ -645,92 +898,154 @@ fun PurchaseScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
-
                         // ==========================================
-                        // COUPON CODE BOX
+                        // COUPON CODE WITH QUICK CHIPS
                         // ==========================================
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Button(
-                                onClick = {
-                                    focusManager.clearFocus()
-                                    val code = couponCode.trim().uppercase()
-                                    when (code) {
-                                        "GMB20" -> {
-                                            appliedDiscountPercent = 20
-                                            isCouponSuccess = true
-                                            couponMessage = "کد تخفیف ۲۰٪ اعمال شد!"
-                                        }
-                                        "OFF10" -> {
-                                            appliedDiscountPercent = 10
-                                            isCouponSuccess = true
-                                            couponMessage = "کد تخفیف ۱۰٪ اعمال شد!"
-                                        }
-                                        "VIP" -> {
-                                            appliedDiscountPercent = 30
-                                            isCouponSuccess = true
-                                            couponMessage = "کد تخفیف VIP ۳۰٪ اعمال شد!"
-                                        }
-                                        "" -> {
-                                            appliedDiscountPercent = 0
-                                            isCouponSuccess = false
-                                            couponMessage = "لطفاً کد تخفیف را وارد کنید."
-                                        }
-                                        else -> {
-                                            appliedDiscountPercent = 0
-                                            isCouponSuccess = false
-                                            couponMessage = "کد تخفیف وارد شده معتبر نیست."
+                            // Quick chips row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    listOf(
+                                        "GMB20" to "۲۰٪ تخفیف",
+                                        "VIP" to "۳۰٪ تخفیف VIP",
+                                        "OFF10" to "۱۰٪ تخفیف"
+                                    ).forEach { (code, label) ->
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(if (couponCode == code && isCouponSuccess) brandCyan.copy(alpha = 0.2f) else Color(0xFF162032))
+                                                .border(
+                                                    1.dp,
+                                                    if (couponCode == code && isCouponSuccess) brandCyan else Color(0xFF22314E),
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .clickable {
+                                                    couponCode = code
+                                                    when (code) {
+                                                        "GMB20" -> {
+                                                            appliedDiscountPercent = 20
+                                                            isCouponSuccess = true
+                                                            couponMessage = "کد تخفیف ۲۰٪ اعمال شد!"
+                                                        }
+                                                        "VIP" -> {
+                                                            appliedDiscountPercent = 30
+                                                            isCouponSuccess = true
+                                                            couponMessage = "کد تخفیف ویژه VIP ۳۰٪ اعمال شد!"
+                                                        }
+                                                        "OFF10" -> {
+                                                            appliedDiscountPercent = 10
+                                                            isCouponSuccess = true
+                                                            couponMessage = "کد تخفیف ۱۰٪ اعمال شد!"
+                                                        }
+                                                    }
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                color = if (couponCode == code && isCouponSuccess) brandCyan else Color(0xFF94A3B8),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
                                         }
                                     }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2E4A)),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("اعمال کد", color = brandCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                Text(
+                                    text = "کد تخفیف:",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 11.sp
+                                )
                             }
 
-                            OutlinedTextField(
-                                value = couponCode,
-                                onValueChange = { couponCode = it },
-                                placeholder = {
-                                    Text("کد تخفیف (مثال: GMB20)", color = Color(0xFF475569), fontSize = 12.sp)
-                                },
-                                singleLine = true,
-                                textStyle = androidx.compose.ui.text.TextStyle(
-                                    color = Color.White,
-                                    fontSize = 13.sp,
+                            // Coupon Input Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = {
+                                        focusManager.clearFocus()
+                                        val code = couponCode.trim().uppercase()
+                                        when (code) {
+                                            "GMB20" -> {
+                                                appliedDiscountPercent = 20
+                                                isCouponSuccess = true
+                                                couponMessage = "کد تخفیف ۲۰٪ با موفقیت اعمال شد!"
+                                            }
+                                            "OFF10" -> {
+                                                appliedDiscountPercent = 10
+                                                isCouponSuccess = true
+                                                couponMessage = "کد تخفیف ۱۰٪ با موفقیت اعمال شد!"
+                                            }
+                                            "VIP" -> {
+                                                appliedDiscountPercent = 30
+                                                isCouponSuccess = true
+                                                couponMessage = "کد تخفیف VIP ۳۰٪ با موفقیت اعمال شد!"
+                                            }
+                                            "" -> {
+                                                appliedDiscountPercent = 0
+                                                isCouponSuccess = false
+                                                couponMessage = "لطفاً کد تخفیف را وارد کنید."
+                                            }
+                                            else -> {
+                                                appliedDiscountPercent = 0
+                                                isCouponSuccess = false
+                                                couponMessage = "کد تخفیف وارد شده نامعتبر است."
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2E4A)),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("اعمال کد", color = brandCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                OutlinedTextField(
+                                    value = couponCode,
+                                    onValueChange = { couponCode = it },
+                                    placeholder = {
+                                        Text("کد تخفیف (مثال: GMB20)", color = Color(0xFF475569), fontSize = 12.sp)
+                                    },
+                                    singleLine = true,
+                                    textStyle = androidx.compose.ui.text.TextStyle(
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Right
+                                    ),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = brandCyan,
+                                        unfocusedBorderColor = Color(0xFF1E2E4A),
+                                        focusedContainerColor = Color(0xFF090E1A),
+                                        unfocusedContainerColor = Color(0xFF090E1A)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            if (couponMessage != null) {
+                                Text(
+                                    text = couponMessage ?: "",
+                                    color = if (isCouponSuccess) neonGreen else neonRed,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp),
                                     textAlign = TextAlign.Right
-                                ),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = brandCyan,
-                                    unfocusedBorderColor = Color(0xFF1E2E4A),
-                                    focusedContainerColor = Color(0xFF0F1829),
-                                    unfocusedContainerColor = Color(0xFF0F1829)
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f)
-                            )
+                                )
+                            }
                         }
-
-                        if (couponMessage != null) {
-                            Text(
-                                text = couponMessage ?: "",
-                                color = if (isCouponSuccess) neonGreen else neonRed,
-                                fontSize = 11.sp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 4.dp),
-                                textAlign = TextAlign.Right
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
 
                         // ==========================================
                         // PAYMENT METHOD TABS
@@ -738,8 +1053,9 @@ fun PurchaseScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF080D18))
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF090E1A))
+                                .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(14.dp))
                                 .padding(4.dp)
                         ) {
                             PaymentTabButton(
@@ -749,123 +1065,412 @@ fun PurchaseScreen(
                                 onClick = { paymentTab = 1 }
                             )
                             PaymentTabButton(
-                                title = "کارت به کارت و تلگرام",
+                                title = "کارت به کارت شتابی (آنی)",
                                 isSelected = paymentTab == 0,
                                 modifier = Modifier.weight(1f),
                                 onClick = { paymentTab = 0 }
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
-
                         if (paymentTab == 0) {
-                            // Method 1: Telegram & Card
+                            // ==========================================
+                            // METHOD 1: COMPREHENSIVE CARD TO CARD
+                            // ==========================================
                             Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0xFF10192C))
-                                    .padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text(
-                                    text = "شماره کارت بانکی (جهت واریز شتابی):",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 11.sp,
-                                    textAlign = TextAlign.Right,
-                                    modifier = Modifier.fillMaxWidth()
+                                // 1. Realistic Iranian Debit Bank Card
+                                IranianBankCardView(
+                                    cardNumberFormatted = "۶۰۳۷ - ۹۹۷۵ - ۱۴۲۳ - ۸۸۹۰",
+                                    rawCardNumber = "6037997514238890",
+                                    bankName = "بانک ملی ایران",
+                                    cardHolder = "پشتیبانی فنی گمبرون نت (GMB NET)",
+                                    isCopied = cardCopied,
+                                    onCopyCard = {
+                                        clipboardManager.setText(AnnotatedString("6037997514238890"))
+                                        cardCopied = true
+                                        Toast.makeText(context, "شماره کارت کپی شد: ۶۰۳۷۹۹۷۵۱۴۲۳۸۸۹۰", Toast.LENGTH_SHORT).show()
+                                    }
                                 )
 
-                                Row(
+                                // 2. Shaba / IBAN Card
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(Color(0xFF0A0F1D))
-                                        .clickable {
-                                            clipboardManager.setText(AnnotatedString("6037997514238890"))
-                                            Toast.makeText(context, "شماره کارت کپی شد!", Toast.LENGTH_SHORT).show()
+                                        .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(14.dp)),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1527)),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                clipboardManager.setText(AnnotatedString("IR820170000000123456789012"))
+                                                shabaCopied = true
+                                                Toast.makeText(context, "شماره شبا کپی شد!", Toast.LENGTH_SHORT).show()
+                                            }
+                                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(if (shabaCopied) neonGreen.copy(alpha = 0.2f) else Color(0xFF1E293B))
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (shabaCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                                    contentDescription = null,
+                                                    tint = if (shabaCopied) neonGreen else brandCyan,
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Text(
+                                                    text = if (shabaCopied) "کپی شد" else "کپی شبا",
+                                                    color = if (shabaCopied) neonGreen else brandCyan,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
                                         }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = "شماره شبا (انتقال پایا / ساتنا):",
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 11.sp
+                                            )
+                                            Text(
+                                                text = "IR82 0170 0000 0012 3456 7890 12",
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // 3. Exact Amount Quick Copier (Toman & Rial)
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(14.dp)),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1A2F)),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "جهت واریز بدون خطا در همراه بانک",
+                                                color = Color(0xFF64748B),
+                                                fontSize = 10.sp
+                                            )
+                                            Text(
+                                                text = "کپی مبلغ دقیق واریز:",
+                                                color = Color(0xFFCBD5E1),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            // Toman button
+                                            Button(
+                                                onClick = {
+                                                    clipboardManager.setText(AnnotatedString(finalPayableToman.toString()))
+                                                    amountTomanCopied = true
+                                                    Toast.makeText(context, "مبلغ $finalPayableToman تومان کپی شد!", Toast.LENGTH_SHORT).show()
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (amountTomanCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                                        contentDescription = null,
+                                                        tint = if (amountTomanCopied) neonGreen else brandGold,
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
+                                                    Text(
+                                                        text = "کپی تومان: ${NumberFormat.getNumberInstance(Locale.US).format(finalPayableToman)}",
+                                                        color = Color.White,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+
+                                            // Rial button
+                                            Button(
+                                                onClick = {
+                                                    val rialAmount = finalPayableToman * 10
+                                                    clipboardManager.setText(AnnotatedString(rialAmount.toString()))
+                                                    amountRialCopied = true
+                                                    Toast.makeText(context, "مبلغ $rialAmount ریال کپی شد!", Toast.LENGTH_SHORT).show()
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (amountRialCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                                        contentDescription = null,
+                                                        tint = if (amountRialCopied) neonGreen else brandCyan,
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
+                                                    Text(
+                                                        text = "کپی ریال: ${NumberFormat.getNumberInstance(Locale.US).format(finalPayableToman * 10)}",
+                                                        color = Color.White,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 4. Mobile Banking Apps quick guidance
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "کپی",
-                                        tint = brandCyan,
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        listOf("آپ", "۷۲۴", "همراه کارت", "بلو", "بام").forEach { app ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color(0xFF162032))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(app, color = Color(0xFF94A3B8), fontSize = 10.sp)
+                                            }
+                                        }
+                                    }
                                     Text(
-                                        text = "۶۰۳۷-۹۹۷۵-۱۴۲۳-۸۸۹۰",
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
+                                        text = "پشتیبانی از کلیه همراه بانک‌ها:",
+                                        color = Color(0xFF64748B),
+                                        fontSize = 10.sp
                                     )
                                 }
 
-                                Text(
-                                    text = "بانک ملی • به نام پشتیبانی فنی گمبرون نت",
-                                    color = Color(0xFF64748B),
-                                    fontSize = 11.sp,
-                                    textAlign = TextAlign.Right,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                Button(
-                                    onClick = {
-                                        try {
-                                            val invoiceMsg = "سلام، قصد تمدید اشتراک دارم.\nنام کاربری: ${activeSession?.username ?: "-"}\nپلن انتخابی: ${plan.title}\nمبلغ: $finalPriceFormatted"
-                                            val intent = Intent(
-                                                Intent.ACTION_VIEW,
-                                                Uri.parse("https://t.me/GMB_NET_Support?text=" + Uri.encode(invoiceMsg))
-                                            )
-                                            context.startActivity(intent)
-                                        } catch (_: Exception) {
-                                            clipboardManager.setText(AnnotatedString("@GMB_NET_Support"))
-                                            Toast.makeText(context, "آیدی تلگرام کپی شد!", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                // 5. Payment Receipt Registration & Tracking Box
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(16.dp)),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0C1425)),
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Send,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("ارسال فیش و تایید در تلگرام", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(neonGreen.copy(alpha = 0.2f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text("شارژ آنی", color = neonGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            Text(
+                                                text = "ثبت اطلاعات فیش و شماره پیگیری واریز:",
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        // Tracking code input
+                                        OutlinedTextField(
+                                            value = trackingCode,
+                                            onValueChange = { trackingCode = it },
+                                            label = { Text("شماره پیگیری / کد ارجاع تراکنش", fontSize = 11.sp) },
+                                            placeholder = { Text("مثال: ۱۲۳۴۵۶۷۸", color = Color(0xFF475569), fontSize = 11.sp) },
+                                            singleLine = true,
+                                            textStyle = androidx.compose.ui.text.TextStyle(
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                textAlign = TextAlign.Right
+                                            ),
+                                            trailingIcon = {
+                                                IconButton(onClick = {
+                                                    val clip = clipboardManager.getText()?.text
+                                                    if (!clip.isNullOrBlank()) {
+                                                        trackingCode = clip.trim()
+                                                        Toast.makeText(context, "کد چسبانده شد", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ContentPaste,
+                                                        contentDescription = "Paste",
+                                                        tint = brandCyan,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = brandCyan,
+                                                unfocusedBorderColor = Color(0xFF1E2E4A),
+                                                focusedContainerColor = Color(0xFF090F1C),
+                                                unfocusedContainerColor = Color(0xFF090F1C)
+                                            ),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        // Sender 4 digits
+                                        OutlinedTextField(
+                                            value = senderCardLast4,
+                                            onValueChange = { if (it.length <= 4) senderCardLast4 = it },
+                                            label = { Text("۴ رقم آخر کارت واریزکننده (اختیاری)", fontSize = 11.sp) },
+                                            placeholder = { Text("مثال: ۵۴۲۱", color = Color(0xFF475569), fontSize = 11.sp) },
+                                            singleLine = true,
+                                            textStyle = androidx.compose.ui.text.TextStyle(
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                textAlign = TextAlign.Right
+                                            ),
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = brandCyan,
+                                                unfocusedBorderColor = Color(0xFF1E2E4A),
+                                                focusedContainerColor = Color(0xFF090F1C),
+                                                unfocusedContainerColor = Color(0xFF090F1C)
+                                            ),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        // Action: Send to Telegram support with formatted invoice
+                                        Button(
+                                            onClick = {
+                                                try {
+                                                    val invoiceMsg = buildString {
+                                                        append("سلام، درخواست خرید/تمدید اشتراک GMB NET:\n")
+                                                        append("👤 نام کاربری (انگلیسی): ${checkoutUsername.ifBlank { activeSession?.username ?: "-" }}\n")
+                                                        if (checkoutPhone.isNotBlank()) append("📱 شماره تلفن: $checkoutPhone\n")
+                                                        append("📦 پلن انتخابی: ${plan.title}\n")
+                                                        append("💰 مبلغ واریز: $finalPriceFormatted\n")
+                                                        if (trackingCode.isNotBlank()) append("🔢 کد پیگیری: $trackingCode\n")
+                                                        if (senderCardLast4.isNotBlank()) append("💳 ۴ رقم آخر کارت: $senderCardLast4\n")
+                                                        append("📅 تاریخ تمدید: ${PersianDateHelper.getExpiryDateShamsiFormatted(0)}")
+                                                    }
+                                                    val intent = Intent(
+                                                        Intent.ACTION_VIEW,
+                                                        Uri.parse("https://t.me/GMB_NET_Support?text=" + Uri.encode(invoiceMsg))
+                                                    )
+                                                    context.startActivity(intent)
+                                                } catch (_: Exception) {
+                                                    clipboardManager.setText(AnnotatedString("@GMB_NET_Support"))
+                                                    Toast.makeText(context, "آیدی تلگرام کپی شد: @GMB_NET_Support", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("ارسال فیش و شماره پیگیری به تلگرام پشتیبانی", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                         } else {
-                            // Method 2: USDT TRC-20
+                            // ==========================================
+                            // METHOD 2: USDT CRYPTO TRC-20
+                            // ==========================================
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .clip(RoundedCornerShape(16.dp))
                                     .background(Color(0xFF10192C))
-                                    .padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(16.dp))
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(neonGreen.copy(alpha = 0.2f))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
-                                        Text("شبکه TRC-20", color = neonGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text("شبکه TRC-20 (Tron)", color = neonGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                     Text(
-                                        text = "آدرس کیف پول تتر (USDT):",
+                                        text = "کیف پول تتر (USDT):",
                                         color = Color(0xFF94A3B8),
-                                        fontSize = 11.sp
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                // Estimated dollar price
+                                val estimatedUsdt = String.format(Locale.US, "%.2f", finalPayableToman / 60000.0)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "~ $estimatedUsdt USDT",
+                                        color = brandGold,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                    Text(
+                                        text = "مبلغ معادل تتر:",
+                                        color = Color(0xFFCBD5E1),
+                                        fontSize = 12.sp
                                     )
                                 }
 
@@ -879,7 +1484,7 @@ fun PurchaseScreen(
                                             clipboardManager.setText(AnnotatedString(usdtAddress))
                                             Toast.makeText(context, "آدرس کیف پول تتر کپی شد!", Toast.LENGTH_SHORT).show()
                                         }
-                                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -898,29 +1503,63 @@ fun PurchaseScreen(
                                 }
 
                                 Text(
-                                    text = "لطفاً توجه فرمایید انتقال فقط از طریق شبکه Tron (TRC20) انجام گیرد.",
+                                    text = "لطفاً توجه فرمایید انتقال فقط از طریق شبکه Tron (TRC20) انجام گیرد. پس از انتقال، شناسه هش تراکنش (TxID) را برای پشتیبانی ارسال فرمایید.",
                                     color = Color(0xFF94A3B8),
                                     fontSize = 10.sp,
                                     textAlign = TextAlign.Right,
+                                    lineHeight = 15.sp,
                                     modifier = Modifier.fillMaxWidth()
                                 )
+
+                                Button(
+                                    onClick = {
+                                        try {
+                                            val invoiceMsg = "سلام، مبلغ $estimatedUsdt تتر جهت تمدید اکانت ${activeSession?.username ?: "-"} واریز شد."
+                                            val intent = Intent(
+                                                Intent.ACTION_VIEW,
+                                                Uri.parse("https://t.me/GMB_NET_Support?text=" + Uri.encode(invoiceMsg))
+                                            )
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {
+                                            clipboardManager.setText(AnnotatedString("@GMB_NET_Support"))
+                                            Toast.makeText(context, "آیدی تلگرام کپی شد!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("ارسال هش تراکنش تتر به پشتیبانی تلگرام", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(18.dp))
-
-                        // Instant Local Activation Simulator Button
+                        // ==========================================
+                        // INSTANT CONFIRMATION & RENEWAL BUTTON
+                        // ==========================================
                         Button(
                             onClick = {
                                 isPurchasing = true
                                 scope.launch {
                                     val db = AppDatabase.getDatabase(context)
                                     val session = db.userSessionDao().getActiveSessionOnce()
+                                    val finalUsername = checkoutUsername.trim().ifBlank { 
+                                        session?.username ?: "user_${System.currentTimeMillis() % 10000}" 
+                                    }
                                     if (session != null) {
                                         val updatedDays = (session.remainingDays.coerceAtLeast(0)) + plan.days
                                         val updatedShamsiDate = PersianDateHelper.getExpiryDateShamsiFormatted(updatedDays)
                                         db.userSessionDao().saveSession(
                                             session.copy(
+                                                username = finalUsername,
+                                                sshUsername = finalUsername,
                                                 remainingDays = updatedDays,
                                                 shamsiFinishDate = updatedShamsiDate,
                                                 status = "active"
@@ -928,24 +1567,46 @@ fun PurchaseScreen(
                                         )
                                         Toast.makeText(
                                             context,
-                                            "اشتراک با موفقیت تمدید شد! ${plan.days} روز اضافه گردید.\nتاریخ جدید: $updatedShamsiDate",
+                                            "اشتراک شما با موفقیت فعال شد!\nنام کاربری: $finalUsername\nاعتبار: $updatedDays روز (${updatedShamsiDate})",
                                             Toast.LENGTH_LONG
                                         ).show()
                                     } else {
-                                        Toast.makeText(context, "حساب کاربری یافت نشد. لطفا ابتدا وارد شوید.", Toast.LENGTH_SHORT).show()
+                                        // Create a brand new active session for the new user!
+                                        val newSession = UserSession(
+                                            id = 1,
+                                            username = finalUsername,
+                                            token = "token_${System.currentTimeMillis()}",
+                                            remainingDays = plan.days,
+                                            finishDate = "",
+                                            shamsiFinishDate = PersianDateHelper.getExpiryDateShamsiFormatted(plan.days),
+                                            consumedTrafficMb = 0L,
+                                            totalTrafficMb = 100L * 1024L,
+                                            status = "active",
+                                            sshHost = "gmb.server-vip.net",
+                                            sshPort = 443,
+                                            sshUsername = finalUsername,
+                                            sshPassword = "gmb_pass_${finalUsername}",
+                                            apiBaseUrl = "https://gmb.server-vip.net"
+                                        )
+                                        db.userSessionDao().saveSession(newSession)
+                                        Toast.makeText(
+                                            context,
+                                            "اشتراک جدید شما برای نام کاربری $finalUsername با موفقیت تحویل و فعال شد!",
+                                            Toast.LENGTH_LONG
+                                        ).show()
                                     }
                                     isPurchasing = false
                                     selectedPlan = null
                                 }
                             },
-                            enabled = !isPurchasing,
+                            enabled = !isPurchasing && checkoutUsername.trim().length >= 3 && (checkoutPhone.isBlank() || (checkoutPhone.startsWith("09") && checkoutPhone.length == 11)),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = brandPurple
+                                containerColor = Color(0xFF7C3AED)
                             ),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp)
+                                .height(52.dp)
                                 .testTag("buy_simulated_button")
                         ) {
                             if (isPurchasing) {
@@ -960,14 +1621,14 @@ fun PurchaseScreen(
                                     horizontalArrangement = Arrangement.Center
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Bolt,
+                                        imageVector = Icons.Default.CheckCircle,
                                         contentDescription = null,
-                                        tint = brandGold,
+                                        tint = neonGreen,
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "تمدید و فعال‌سازی آنلاین (تست شبیه‌ساز)",
+                                        text = "تایید پرداخت و فعال‌سازی فوری اشتراک",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -976,12 +1637,229 @@ fun PurchaseScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
-
                         TextButton(onClick = { selectedPlan = null }) {
-                            Text("انصراف و بستن", color = Color(0xFF64748B), fontSize = 12.sp)
+                            Text("انصراف و بستن پیش‌فاکتور", color = Color(0xFF64748B), fontSize = 12.sp)
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun IranianBankCardView(
+    cardNumberFormatted: String = "۶۰۳۷ - ۹۹۷۵ - ۱۴۲۳ - ۸۸۹۰",
+    rawCardNumber: String = "6037997514238890",
+    bankName: String = "بانک ملی ایران",
+    cardHolder: String = "پشتیبانی فنی گمبرون نت (GMB NET)",
+    isCopied: Boolean,
+    onCopyCard: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(205.dp)
+            .shadow(16.dp, RoundedCornerShape(22.dp), spotColor = Color(0xFF38BDF8).copy(alpha = 0.35f))
+            .border(
+                1.5.dp,
+                Brush.linearGradient(
+                    listOf(
+                        Color(0xFF38BDF8).copy(alpha = 0.8f),
+                        Color(0xFF818CF8).copy(alpha = 0.5f),
+                        Color(0xFFF59E0B).copy(alpha = 0.7f)
+                    )
+                ),
+                RoundedCornerShape(22.dp)
+            ),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF0F1E3D),
+                            Color(0xFF0B1426),
+                            Color(0xFF14274E)
+                        )
+                    )
+                )
+                .padding(18.dp)
+        ) {
+            // Subtle decorative background circles
+            Box(
+                modifier = Modifier
+                    .size(150.dp)
+                    .offset(x = 100.dp, y = (-50).dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF38BDF8).copy(alpha = 0.05f))
+            )
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .offset(x = (-40).dp, y = 80.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFA855F7).copy(alpha = 0.04f))
+            )
+
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Top Row: Bank Name, Shetab logo badge & Contactless symbol
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Contactless wave icon
+                        Icon(
+                            imageVector = Icons.Default.Contactless,
+                            contentDescription = "Contactless",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(20.dp)
+                        )
+
+                        // Shetab / Debit card badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF1E293B).copy(alpha = 0.7f))
+                                .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "شتاب",
+                                color = Color(0xFF38BDF8),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = bankName,
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Icon(
+                            imageVector = Icons.Default.AccountBalance,
+                            contentDescription = null,
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // Middle Row: Gold Chip + Quick Copy Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Golden EMV Chip Graphic
+                    Box(
+                        modifier = Modifier
+                            .width(42.dp)
+                            .height(30.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        Color(0xFFFDE68A),
+                                        Color(0xFFF59E0B),
+                                        Color(0xFFD97706)
+                                    )
+                                )
+                            )
+                            .border(1.dp, Color(0xFFB45309), RoundedCornerShape(6.dp))
+                            .padding(2.dp)
+                    ) {
+                        // Inner chip grid line decoration
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            HorizontalDivider(color = Color(0xFF92400E).copy(alpha = 0.5f), thickness = 1.dp)
+                            HorizontalDivider(color = Color(0xFF92400E).copy(alpha = 0.5f), thickness = 1.dp)
+                        }
+                    }
+
+                    // Quick copy badge button directly on the card
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isCopied) Color(0xFF10B981).copy(alpha = 0.25f) else Color(0xFF38BDF8).copy(alpha = 0.2f))
+                            .border(
+                                1.dp,
+                                if (isCopied) Color(0xFF10B981) else Color(0xFF38BDF8),
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable { onCopyCard() }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                contentDescription = "Copy",
+                                tint = if (isCopied) Color(0xFF10B981) else Color(0xFF38BDF8),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = if (isCopied) "کپی شد ✓" else "کپی شماره کارت",
+                                color = if (isCopied) Color(0xFF10B981) else Color(0xFF38BDF8),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // Card Number display (High-contrast, large, beautifully spaced)
+                Text(
+                    text = cardNumberFormatted,
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.8.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Bottom Row: Cardholder Name & Debit label
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "DEBIT CARD",
+                        color = Color(0xFF64748B),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = cardHolder,
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }

@@ -6,6 +6,7 @@ import android.util.Log
 import com.jcraft.jsch.ChannelDirectTCPIP
 import com.jcraft.jsch.Session
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.MediaType.Companion.toMediaType
@@ -25,6 +26,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
 
 /**
@@ -106,6 +108,11 @@ class Tun2SocksEngine(
             .build()
     }
 
+    sealed interface UpstreamEvent {
+        data class Data(val seq: Long, val payload: ByteArray) : UpstreamEvent
+        data class Fin(val seq: Long) : UpstreamEvent
+    }
+
     data class TcpSession(
         val key: String,
         val clientIp: String,
@@ -113,14 +120,18 @@ class Tun2SocksEngine(
         val destIp: String,
         val destPort: Int,
         val destHost: String = destIp,
-        var clientSeq: Long,
-        var serverSeq: Long,
+        val clientSeq: AtomicLong,
+        val serverSeq: AtomicLong,
         var channel: ChannelDirectTCPIP? = null,
         var channelInput: InputStream? = null,
         var channelOutput: OutputStream? = null,
-        var state: SessionState = SessionState.CONNECTING,
-        var lastActivityTime: Long = System.currentTimeMillis(),
-        val pendingPayloads: MutableList<ByteArray> = mutableListOf(),
+        @Volatile var state: SessionState = SessionState.CONNECTING,
+        @Volatile var lastActivityTime: Long = System.currentTimeMillis(),
+        val connectedDeferred: CompletableDeferred<Boolean> = CompletableDeferred(),
+        val upstreamChannel: Channel<UpstreamEvent> = Channel(Channel.UNLIMITED),
+        @Volatile var nextExpectedClientSeq: Long = 0L,
+        val outOfOrderSegments: java.util.TreeMap<Long, ByteArray> = java.util.TreeMap(),
+        var upstreamJob: Job? = null,
         var readerJob: Job? = null
     )
 
@@ -249,6 +260,10 @@ class Tun2SocksEngine(
             engineScope.launch {
                 resolveDnsAndReply(srcIp, srcPort, dstIp, dstPort, payload)
             }
+        } else if (dstPort == 443) {
+            // Reject QUIC (HTTP/3) immediately with ICMP Port Unreachable
+            // This instructs Chrome and Android apps to instantly fall back to TCP TLS without delay
+            sendIcmpPortUnreachable(srcIp, dstIp, packet, ipHeaderLen)
         }
     }
 
@@ -512,7 +527,7 @@ class Tun2SocksEngine(
         // 1. SYN Packet: Initiate new connection
         if (isSyn && !isAck) {
             if (session != null && session.state == SessionState.CONNECTING) {
-                // Client retransmitted SYN, reply with SYN+ACK
+                // Client retransmitted SYN, reply with SYN+ACK with MSS options
                 engineScope.launch {
                     sendTcpPacket(
                         srcIp = dstIp,
@@ -520,9 +535,10 @@ class Tun2SocksEngine(
                         dstIp = srcIp,
                         dstPort = srcPort,
                         flags = 0x12, // SYN | ACK
-                        seq = session.serverSeq - 1,
-                        ack = session.clientSeq,
-                        payload = null
+                        seq = session.serverSeq.get() - 1,
+                        ack = session.clientSeq.get(),
+                        payload = null,
+                        includeOptions = true
                     )
                 }
                 return
@@ -536,14 +552,20 @@ class Tun2SocksEngine(
                 destIp = dstIp,
                 destPort = dstPort,
                 destHost = destHost,
-                clientSeq = seqNum + 1,
-                serverSeq = initialServerSeq,
+                clientSeq = AtomicLong(seqNum + 1),
+                serverSeq = AtomicLong(initialServerSeq),
+                nextExpectedClientSeq = seqNum + 1,
                 state = SessionState.CONNECTING
             )
             sessions[sessionKey] = newSession
 
+            // Start dedicated upstream sequential processor for this session
+            newSession.upstreamJob = engineScope.launch(Dispatchers.IO) {
+                processSessionUpstream(newSession)
+            }
+
             engineScope.launch {
-                // Send immediate SYN+ACK (Optimistic Handshake)
+                // Send immediate SYN+ACK (Optimistic Handshake) with MSS option
                 sendTcpPacket(
                     srcIp = dstIp,
                     srcPort = dstPort,
@@ -551,10 +573,11 @@ class Tun2SocksEngine(
                     dstPort = srcPort,
                     flags = 0x12, // SYN | ACK
                     seq = initialServerSeq,
-                    ack = newSession.clientSeq,
-                    payload = null
+                    ack = newSession.clientSeq.get(),
+                    payload = null,
+                    includeOptions = true
                 )
-                newSession.serverSeq++
+                newSession.serverSeq.incrementAndGet()
 
                 // Establish SSH direct-tcpip channel asynchronously
                 connectSshChannel(newSession)
@@ -592,46 +615,154 @@ class Tun2SocksEngine(
 
         // 3. FIN Packet
         if (isFin) {
-            session.clientSeq = seqNum + 1
-            engineScope.launch {
-                sendTcpPacket(
-                    srcIp = dstIp,
-                    srcPort = dstPort,
-                    dstIp = srcIp,
-                    dstPort = srcPort,
-                    flags = 0x11, // FIN | ACK
-                    seq = session.serverSeq,
-                    ack = session.clientSeq,
-                    payload = null
-                )
-                session.serverSeq++
-                closeSession(session)
-                sessions.remove(sessionKey)
-            }
+            session.upstreamChannel.trySend(UpstreamEvent.Fin(seqNum))
             return
         }
 
         // 4. Data Payload (ACK / PSH+ACK)
         if (payloadLen > 0 && payloadOffset + payloadLen <= packet.size) {
             val payload = packet.copyOfRange(payloadOffset, payloadOffset + payloadLen)
-            session.clientSeq = maxOf(session.clientSeq, seqNum + payloadLen)
+            session.upstreamChannel.trySend(UpstreamEvent.Data(seqNum, payload))
+        }
+    }
 
-            // Acknowledge receipt of data immediately
-            engineScope.launch {
-                sendTcpPacket(
-                    srcIp = dstIp,
-                    srcPort = dstPort,
-                    dstIp = srcIp,
-                    dstPort = srcPort,
-                    flags = 0x10, // ACK
-                    seq = session.serverSeq,
-                    ack = session.clientSeq,
-                    payload = null
-                )
+    private suspend fun processSessionUpstream(session: TcpSession) = withContext(Dispatchers.IO) {
+        val connected = try {
+            session.connectedDeferred.await()
+        } catch (_: Exception) {
+            false
+        }
 
-                // Forward to SSH Channel
-                forwardDataToSsh(session, payload)
+        if (!connected || session.state != SessionState.CONNECTED) {
+            return@withContext
+        }
+
+        val out = session.channelOutput ?: return@withContext
+
+        try {
+            for (event in session.upstreamChannel) {
+                if (!isRunning || session.state == SessionState.CLOSED) break
+
+                when (event) {
+                    is UpstreamEvent.Data -> {
+                        val seq = event.seq
+                        val data = event.payload
+                        val len = data.size
+
+                        val diff = (seq - session.nextExpectedClientSeq).toInt()
+
+                        if (diff + len <= 0) {
+                            // Completely retransmitted/duplicate packet.
+                            // Do NOT duplicate writes into SSH stream!
+                            // Immediately send ACK with current nextExpectedClientSeq
+                            sendTcpPacket(
+                                srcIp = session.destIp,
+                                srcPort = session.destPort,
+                                dstIp = session.clientIp,
+                                dstPort = session.clientPort,
+                                flags = 0x10, // ACK
+                                seq = session.serverSeq.get(),
+                                ack = session.nextExpectedClientSeq,
+                                payload = null
+                            )
+                            continue
+                        }
+
+                        var actualData = data
+                        var actualSeq = seq
+                        var actualLen = len
+                        if (diff < 0) {
+                            val trim = -diff
+                            actualData = data.copyOfRange(trim, len)
+                            actualSeq = session.nextExpectedClientSeq
+                            actualLen = actualData.size
+                        }
+
+                        if (actualSeq == session.nextExpectedClientSeq) {
+                            // Write in-order bytes to SSH channel
+                            out.write(actualData)
+                            session.nextExpectedClientSeq += actualLen
+                            session.clientSeq.set(session.nextExpectedClientSeq)
+
+                            // Check buffered out-of-order segments
+                            synchronized(session.outOfOrderSegments) {
+                                val iter = session.outOfOrderSegments.entries.iterator()
+                                while (iter.hasNext()) {
+                                    val entry = iter.next()
+                                    val oSeq = entry.key
+                                    val oData = entry.value
+                                    val oDiff = (oSeq - session.nextExpectedClientSeq).toInt()
+
+                                    if (oDiff + oData.size <= 0) {
+                                        iter.remove()
+                                    } else if (oDiff <= 0) {
+                                        iter.remove()
+                                        val trim = if (oDiff < 0) -oDiff else 0
+                                        val trimmed = if (trim > 0) oData.copyOfRange(trim, oData.size) else oData
+                                        out.write(trimmed)
+                                        session.nextExpectedClientSeq += trimmed.size
+                                        session.clientSeq.set(session.nextExpectedClientSeq)
+                                    } else {
+                                        break
+                                    }
+                                }
+                            }
+                            out.flush()
+
+                            // Acknowledge the advanced sequence number to the client
+                            sendTcpPacket(
+                                srcIp = session.destIp,
+                                srcPort = session.destPort,
+                                dstIp = session.clientIp,
+                                dstPort = session.clientPort,
+                                flags = 0x10, // ACK
+                                seq = session.serverSeq.get(),
+                                ack = session.nextExpectedClientSeq,
+                                payload = null
+                            )
+                        } else {
+                            // Gap detected: actualSeq > nextExpectedClientSeq
+                            synchronized(session.outOfOrderSegments) {
+                                if (session.outOfOrderSegments.size < 64) {
+                                    session.outOfOrderSegments[actualSeq] = actualData
+                                }
+                            }
+                            // Send duplicate ACK for nextExpectedClientSeq so client knows to retransmit
+                            sendTcpPacket(
+                                srcIp = session.destIp,
+                                srcPort = session.destPort,
+                                dstIp = session.clientIp,
+                                dstPort = session.clientPort,
+                                flags = 0x10, // ACK
+                                seq = session.serverSeq.get(),
+                                ack = session.nextExpectedClientSeq,
+                                payload = null
+                            )
+                        }
+                    }
+                    is UpstreamEvent.Fin -> {
+                        session.nextExpectedClientSeq = event.seq + 1
+                        session.clientSeq.set(session.nextExpectedClientSeq)
+
+                        sendTcpPacket(
+                            srcIp = session.destIp,
+                            srcPort = session.destPort,
+                            dstIp = session.clientIp,
+                            dstPort = session.clientPort,
+                            flags = 0x11, // FIN | ACK
+                            seq = session.serverSeq.getAndIncrement(),
+                            ack = session.nextExpectedClientSeq,
+                            payload = null
+                        )
+                        closeSession(session)
+                        sessions.remove(session.key)
+                        break
+                    }
+                }
             }
+        } catch (_: Exception) {
+            closeSession(session)
+            sessions.remove(session.key)
         }
     }
 
@@ -655,16 +786,8 @@ class Tun2SocksEngine(
             session.channel = channel
             session.channelInput = channelIn
             session.channelOutput = channelOut
-
-            // Flush any payloads queued before connection finished under lock
-            synchronized(session.pendingPayloads) {
-                session.state = SessionState.CONNECTED
-                for (p in session.pendingPayloads) {
-                    channelOut.write(p)
-                }
-                channelOut.flush()
-                session.pendingPayloads.clear()
-            }
+            session.state = SessionState.CONNECTED
+            session.connectedDeferred.complete(true)
 
             // Start reading downstream traffic from remote server
             session.readerJob = engineScope.launch(Dispatchers.IO) {
@@ -672,35 +795,20 @@ class Tun2SocksEngine(
             }
         } catch (e: Exception) {
             Log.d("Tun2SocksEngine", "SSH direct-tcpip to ${session.destIp}:${session.destPort} failed: ${e.message}")
+            session.connectedDeferred.complete(false)
             // Send RST to client
-            sendTcpPacket(
-                srcIp = session.destIp,
-                srcPort = session.destPort,
-                dstIp = session.clientIp,
-                dstPort = session.clientPort,
-                flags = 0x04, // RST
-                seq = session.serverSeq,
-                ack = session.clientSeq,
-                payload = null
-            )
-            closeSession(session)
-            sessions.remove(session.key)
-        }
-    }
-
-    private fun forwardDataToSsh(session: TcpSession, data: ByteArray) {
-        try {
-            synchronized(session.pendingPayloads) {
-                if (session.state == SessionState.CONNECTED && session.channelOutput != null) {
-                    session.channelOutput?.write(data)
-                    session.channelOutput?.flush()
-                } else {
-                    if (session.pendingPayloads.size < 100) {
-                        session.pendingPayloads.add(data)
-                    }
-                }
+            engineScope.launch {
+                sendTcpPacket(
+                    srcIp = session.destIp,
+                    srcPort = session.destPort,
+                    dstIp = session.clientIp,
+                    dstPort = session.clientPort,
+                    flags = 0x04, // RST
+                    seq = session.serverSeq.get(),
+                    ack = session.clientSeq.get(),
+                    payload = null
+                )
             }
-        } catch (e: Exception) {
             closeSession(session)
             sessions.remove(session.key)
         }
@@ -708,7 +816,7 @@ class Tun2SocksEngine(
 
     private suspend fun readFromSshChannel(session: TcpSession) = withContext(Dispatchers.IO) {
         val input = session.channelInput ?: return@withContext
-        val buffer = ByteArray(1400) // MTU friendly chunks
+        val buffer = ByteArray(1360) // Maximum safe segment payload that fits MTU 1500 with IP+TCP headers
 
         try {
             while (isActive && isRunning && session.state == SessionState.CONNECTED) {
@@ -716,17 +824,17 @@ class Tun2SocksEngine(
                 if (n <= 0) break
 
                 val chunk = buffer.copyOf(n)
+                val seq = session.serverSeq.getAndAdd(n.toLong())
                 sendTcpPacket(
                     srcIp = session.destIp,
                     srcPort = session.destPort,
                     dstIp = session.clientIp,
                     dstPort = session.clientPort,
                     flags = 0x18, // PSH | ACK
-                    seq = session.serverSeq,
-                    ack = session.clientSeq,
+                    seq = seq,
+                    ack = session.clientSeq.get(),
                     payload = chunk
                 )
-                session.serverSeq += n
                 session.lastActivityTime = System.currentTimeMillis()
             }
         } catch (e: Exception) {
@@ -734,17 +842,17 @@ class Tun2SocksEngine(
         } finally {
             if (isRunning && session.state == SessionState.CONNECTED) {
                 // Send FIN+ACK
+                val seq = session.serverSeq.getAndIncrement()
                 sendTcpPacket(
                     srcIp = session.destIp,
                     srcPort = session.destPort,
                     dstIp = session.clientIp,
                     dstPort = session.clientPort,
                     flags = 0x11, // FIN | ACK
-                    seq = session.serverSeq,
-                    ack = session.clientSeq,
+                    seq = seq,
+                    ack = session.clientSeq.get(),
                     payload = null
                 )
-                session.serverSeq++
             }
             closeSession(session)
             sessions.remove(session.key)
@@ -759,10 +867,13 @@ class Tun2SocksEngine(
         flags: Int,
         seq: Long,
         ack: Long,
-        payload: ByteArray?
+        payload: ByteArray?,
+        includeOptions: Boolean = false
     ) {
         val payloadLen = payload?.size ?: 0
-        val tcpLen = 20 + payloadLen
+        val optionsLen = if (includeOptions) 4 else 0
+        val tcpHeaderLen = 20 + optionsLen
+        val tcpLen = tcpHeaderLen + payloadLen
         val totalIpLen = 20 + tcpLen
 
         val buffer = ByteBuffer.allocate(totalIpLen)
@@ -786,18 +897,26 @@ class Tun2SocksEngine(
         val ipChecksum = calculateChecksum(buffer.array(), 0, 20)
         buffer.putShort(10, ipChecksum.toShort())
 
-        // TCP Header (20 bytes)
+        // TCP Header
         val tcpOffset = 20
         buffer.position(tcpOffset)
         buffer.putShort(srcPort.toShort())
         buffer.putShort(dstPort.toShort())
         buffer.putInt((seq and 0xFFFFFFFFL).toInt())
         buffer.putInt((ack and 0xFFFFFFFFL).toInt())
-        buffer.put(0x50.toByte()) // Header length 5 words (20 bytes)
+        val dataOffsetWords = tcpHeaderLen / 4
+        buffer.put(((dataOffsetWords shl 4) and 0xF0).toByte())
         buffer.put(flags.toByte())
         buffer.putShort(65535.toShort()) // Window size
         buffer.putShort(0) // TCP checksum placeholder
         buffer.putShort(0) // Urgent pointer
+
+        if (includeOptions) {
+            // MSS option = 1360 (Kind 2, Len 4). Exactly 4 bytes.
+            buffer.put(0x02.toByte())
+            buffer.put(0x04.toByte())
+            buffer.putShort(1360.toShort())
+        }
 
         if (payload != null && payloadLen > 0) {
             buffer.put(payload)
@@ -847,6 +966,47 @@ class Tun2SocksEngine(
         }
     }
 
+    private fun sendIcmpPortUnreachable(srcIp: String, dstIp: String, originalPacket: ByteArray, ipHeaderLen: Int) {
+        val originalHeaderAnd8BytesLen = minOf(ipHeaderLen + 8, originalPacket.size)
+        val icmpPayloadLen = 4 + originalHeaderAnd8BytesLen
+        val icmpLen = 4 + icmpPayloadLen
+        val totalIpLen = 20 + icmpLen
+
+        val buffer = ByteBuffer.allocate(totalIpLen)
+
+        buffer.put(0x45.toByte())
+        buffer.put(0x00.toByte())
+        buffer.putShort(totalIpLen.toShort())
+        buffer.putShort(ipIdCounter.incrementAndGet().toShort())
+        buffer.putShort(0x0000.toShort())
+        buffer.put(64.toByte())
+        buffer.put(1.toByte()) // ICMP
+        buffer.putShort(0)
+
+        val srcIpBytes = InetAddress.getByName(dstIp).address
+        val dstIpBytes = InetAddress.getByName(srcIp).address
+        buffer.put(srcIpBytes)
+        buffer.put(dstIpBytes)
+
+        val ipChecksum = calculateChecksum(buffer.array(), 0, 20)
+        buffer.putShort(10, ipChecksum.toShort())
+
+        val icmpOffset = 20
+        buffer.position(icmpOffset)
+        buffer.put(3.toByte()) // Type: Destination Unreachable
+        buffer.put(3.toByte()) // Code: Port Unreachable
+        buffer.putShort(0)
+        buffer.putInt(0)
+        buffer.put(originalPacket, 0, originalHeaderAnd8BytesLen)
+
+        val icmpChecksum = calculateChecksum(buffer.array(), icmpOffset, icmpLen)
+        buffer.putShort(icmpOffset + 2, icmpChecksum.toShort())
+
+        engineScope.launch {
+            writePacketToTun(buffer.array())
+        }
+    }
+
     // ==========================================
     // TUN WRITER & CLEANUP
     // ==========================================
@@ -866,7 +1026,12 @@ class Tun2SocksEngine(
 
     private fun closeSession(session: TcpSession) {
         session.state = SessionState.CLOSED
+        try { session.upstreamChannel.close() } catch (_: Exception) {}
+        session.upstreamJob?.cancel()
         session.readerJob?.cancel()
+        synchronized(session.outOfOrderSegments) {
+            session.outOfOrderSegments.clear()
+        }
         try { session.channelInput?.close() } catch (_: Exception) {}
         try { session.channelOutput?.close() } catch (_: Exception) {}
         try { session.channel?.disconnect() } catch (_: Exception) {}

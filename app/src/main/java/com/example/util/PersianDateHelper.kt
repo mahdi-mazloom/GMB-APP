@@ -225,6 +225,11 @@ object PersianDateHelper {
             return fallbackDays ?: 30
         }
 
+        val clean = toEnglishDigits(finishDateStr.trim())
+        if (clean.contains("2099") || clean.startsWith("209") || clean.startsWith("149") || clean.startsWith("148")) {
+            return fallbackDays ?: 999
+        }
+
         val parsed = parseDateToJalali(finishDateStr)
         if (parsed == null) {
             return fallbackDays ?: 30
@@ -232,7 +237,7 @@ object PersianDateHelper {
 
         val (jy, jm, jd) = parsed
         // If first-connection placeholder or unlimited
-        if (jy >= 1480 || jy >= 2090) {
+        if (jy >= 1470 || jy >= 2090) {
             return fallbackDays ?: 999
         }
 
