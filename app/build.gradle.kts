@@ -11,11 +11,11 @@ android {
   compileSdk = 36
 
   defaultConfig {
-    applicationId = "com.aistudio.npvtunnel.jhyxwq"
+    applicationId = "com.gmbnet.app"
     minSdk = 24
     targetSdk = 35
-    versionCode = 4
-    versionName = "1.3.0"
+    versionCode = 5
+    versionName = "1.3.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -40,10 +40,12 @@ android {
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
+      isDebuggable = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      signingConfig = signingConfigs.getByName("debugConfig")
     }
     debug {
+      isDebuggable = false
       signingConfig = signingConfigs.getByName("debugConfig")
     }
   }
@@ -135,19 +137,19 @@ abstract class CopyApkTask : DefaultTask() {
     if (apk != null && apk.exists()) {
       val target = targetFile.get().asFile
       apk.copyTo(target, overwrite = true)
-      logger.lifecycle("Debug APK successfully copied to: ${target.absolutePath}")
+      logger.lifecycle("APK successfully copied to: ${target.absolutePath}")
     } else {
-      logger.warn("No debug APK found in ${dir?.absolutePath}")
+      logger.warn("No APK found in ${dir?.absolutePath}")
     }
   }
 }
 
 val copyDebugApk = tasks.register<CopyApkTask>("copyDebugApk") {
-  description = "Copies the debug APK to the project root directory."
+  description = "Copies the APK to the project root directory as gmbnet.apk."
   group = "distribution"
   dependsOn("assembleDebug")
   apkDir.set(layout.buildDirectory.dir("outputs/apk/debug"))
-  targetFile.set(rootProject.layout.projectDirectory.file("app-debug.apk"))
+  targetFile.set(rootProject.layout.projectDirectory.file("gmbnet.apk"))
 }
 
 tasks.matching { it.name == "assembleDebug" }.configureEach {

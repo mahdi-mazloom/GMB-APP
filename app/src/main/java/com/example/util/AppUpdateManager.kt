@@ -216,7 +216,7 @@ object AppUpdateManager {
             val contentLength = body.contentLength()
 
             // Save APK in app external files dir so package installer can read via FileProvider
-            val apkFile = File(context.getExternalFilesDir(null), "update_gmb_net.apk")
+            val apkFile = File(context.getExternalFilesDir(null), "gmbnet.apk")
             if (apkFile.exists()) {
                 apkFile.delete()
             }

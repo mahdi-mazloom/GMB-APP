@@ -63,6 +63,10 @@ fun MainScreen(
     val loginState by viewModel.loginState.collectAsState()
 
     // Battery optimization exemption state with auto-refresh on app resume
+    val prefs = remember { context.getSharedPreferences("gmb_prefs", android.content.Context.MODE_PRIVATE) }
+    var isBatteryCardDismissed by remember {
+        mutableStateOf(prefs.getBoolean("battery_card_dismissed", false))
+    }
     var isBatteryExempt by remember { 
         mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)) 
     }
@@ -667,11 +671,7 @@ fun MainScreen(
                 }
 
                 // Battery Optimization & Background Stability Card (Xiaomi, Samsung, Huawei, etc.)
-                AnimatedVisibility(
-                    visible = !isBatteryExempt,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
+                if (!isBatteryExempt && !isBatteryCardDismissed) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -690,21 +690,42 @@ fun MainScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Button(
-                                    onClick = {
-                                        BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
-                                        isBatteryExempt = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = brandCyan),
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text(
-                                        text = "رفع محدودیت باتری",
-                                        color = Color.Black,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    IconButton(
+                                        onClick = {
+                                            prefs.edit().putBoolean("battery_card_dismissed", true).apply()
+                                            isBatteryCardDismissed = true
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "بستن",
+                                            tint = Color(0xFF64748B),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
+                                            prefs.edit().putBoolean("battery_card_dismissed", true).apply()
+                                            isBatteryCardDismissed = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = brandCyan),
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "رفع محدودیت باتری",
+                                            color = Color.Black,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
 
                                 Row(
