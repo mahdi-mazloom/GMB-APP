@@ -10,9 +10,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -28,8 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,6 +45,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.example.vpn.VpnStatus
 import com.example.viewmodel.LoginState
+import com.example.viewmodel.RedeemLicenseUiState
 import com.example.viewmodel.VpnViewModel
 import com.example.util.PersianDateHelper
 import com.example.util.BatteryOptimizationHelper
@@ -78,9 +85,11 @@ fun MainScreen(
     val tx by viewModel.txBytes.collectAsState()
     val secondsElapsed by viewModel.duration.collectAsState()
 
-    // Dialog state for renewal and logout
+    // Dialog state for renewal, voucher redeem, and logout
     var showRenewDialog by remember { mutableStateOf(false) }
+    var showRedeemLicenseDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    val redeemLicenseState by viewModel.redeemLicenseState.collectAsState()
 
     // In-App Update states
     val availableUpdate by viewModel.availableUpdate.collectAsState()
@@ -194,52 +203,38 @@ fun MainScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.gmb_logo),
+                            contentDescription = "GMB NET Logo",
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                        )
+                        Text(
+                            text = "GMB NET",
+                            fontSize = 17.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
                                 .background(if (isExpired) neonRed else if (status == VpnStatus.CONNECTED) neonGreen else brandCyan)
                         )
-                        Text(
-                            text = "- GMB NET -",
-                            fontSize = 17.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
                     }
 
-                    // Action buttons: Refresh, Check Update, and Purchase / Renew
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { viewModel.refreshUserData() }) {
-                            Icon(
-                                imageVector = Icons.Default.Sync,
-                                contentDescription = "بروزرسانی وضعیت",
-                                tint = brandCyan
-                            )
-                        }
-                        IconButton(onClick = { viewModel.checkForAppUpdates(currentVersionCode = 1, isManual = true) }) {
-                            BadgedBox(
-                                badge = {
-                                    if (availableUpdate != null) {
-                                        Badge(containerColor = neonOrange)
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.SystemUpdate,
-                                    contentDescription = "بروزرسانی برنامه",
-                                    tint = if (availableUpdate != null) neonOrange else Color(0xFF94A3B8)
-                                )
-                            }
-                        }
-                        IconButton(onClick = { showRenewDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.ShoppingBag,
-                                contentDescription = "تمدید و خرید اشتراک",
-                                tint = if (isExpired) neonRed else Color(0xFFF59E0B)
-                            )
-                        }
+                    // Action button: Store & License Modal
+                    IconButton(
+                        onClick = { showRenewDialog = true },
+                        modifier = Modifier.testTag("top_shop_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ShoppingBag,
+                            contentDescription = "فروشگاه و تمدید اشتراک",
+                            tint = if (isExpired) neonRed else Color(0xFF38BDF8)
+                        )
                     }
                 }
             }
@@ -541,7 +536,7 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = if (isExpired) "جهت فعال‌سازی، اشتراک را تمدید کنید" else "پروتکل اختصاصی SSH Tunnel • رمزگذاری پیشرفته",
+                            text = if (isExpired) "جهت فعال‌سازی، اشتراک را تمدید کنید" else "پروتکل اختصاصی • رمزگذاری پیشرفته",
                             color = Color(0xFF64748B),
                             fontSize = 11.sp
                         )
@@ -668,95 +663,6 @@ fun MainScreen(
                             borderStrokeColor = borderStrokeColor,
                             modifier = Modifier.weight(1f)
                         )
-                    }
-                }
-
-                // 5. Dedicated Renewal & Package Upgrade Action Card
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showRenewDialog = true }
-                        .border(
-                            1.dp,
-                            if (isExpired) neonRed.copy(alpha = 0.6f) else Color(0xFF38BDF8).copy(alpha = 0.3f),
-                            RoundedCornerShape(18.dp)
-                        ),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.horizontalGradient(
-                                    if (isExpired) {
-                                        listOf(Color(0xFF260810), Color(0xFF150815))
-                                    } else {
-                                        listOf(Color(0xFF0E1A33), Color(0xFF13102C))
-                                    }
-                                )
-                            )
-                            .padding(14.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            FilledTonalButton(
-                                onClick = { showRenewDialog = true },
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = if (isExpired) neonRed else brandCyan,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = if (isExpired) "تمدید فوری" else "مشاهده پلن‌ها",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = if (isExpired) "تمدید اشتراک منقضی شده" else "تمدید اشتراک و ارتقای پلن",
-                                        color = Color.White,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Right
-                                    )
-                                    Text(
-                                        text = "سرعت نامحدود • پشتیبانی ۲۴ ساعته",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 11.sp,
-                                        textAlign = TextAlign.Right
-                                    )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            (if (isExpired) neonRed else brandCyan).copy(alpha = 0.15f)
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.WorkspacePremium,
-                                        contentDescription = "تمدید اشتراک",
-                                        tint = if (isExpired) neonRed else brandCyan,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -927,7 +833,7 @@ fun MainScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = if (isExpired) "پایان اعتبار اشتراک" else "تمدید و خرید اشتراک",
+                        text = if (isExpired) "پایان اعتبار اشتراک" else "فروشگاه و تمدید اشتراک",
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
@@ -938,9 +844,9 @@ fun MainScreen(
 
                     Text(
                         text = if (isExpired)
-                            "زمان بسته شما به پایان رسیده و امکان اتصال به سرورها مسدود گردیده است. جهت برقراری مجدد اتصال و بهره‌مندی از اینترنت آزاد و پرسرعت، لطفاً اشتراک خود را تمدید فرمایید."
+                            "اعتبار اشتراک شما به پایان رسیده است. جهت تمدید با کد لایسنس یا خرید اشتراک از فروشگاه اقدام فرمایید."
                         else
-                            "شما می‌توانید برای تمدید اعتبار زمانی یا ارتقای ترافیک خود، پلن‌های متنوع ما را با تحویل فوری مشاهده و انتخاب فرمایید.",
+                            "جهت خرید اشتراک یا تمدید با کد لایسنس، گزینه مورد نظر را انتخاب کنید.",
                         color = Color(0xFFCBD5E1),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -1006,29 +912,31 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(18.dp))
 
-                    // Primary Action: Navigate to Purchase Screen
+                    // Primary Action: Redeem License
                     Button(
                         onClick = {
                             showRenewDialog = false
-                            onNavigateToPurchase()
+                            viewModel.resetRedeemLicenseState()
+                            showRedeemLicenseDialog = true
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(46.dp),
+                            .height(48.dp)
+                            .testTag("dialog_redeem_voucher_button"),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isExpired) neonRed else Color(0xFF2563EB)
+                            containerColor = Color(0xFF10B981)
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ShoppingCart,
+                            imageVector = Icons.Default.Key,
                             contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "مشاهده تعرفه‌ها و تمدید اشتراک",
+                            text = "تمدید با کد لایسنس",
                             color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
@@ -1037,7 +945,44 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Secondary Action: Refresh account data
+                    // Secondary Action: Open Store
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://gmb-net.ir"))
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "خطا در باز کردن مرورگر", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .testTag("dialog_buy_voucher_web_button"),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.8f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color(0xFF0F172A)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ShoppingBag,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "ورود به فروشگاه",
+                            color = Color(0xFF93C5FD),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Third Action: Refresh account data
                     OutlinedButton(
                         onClick = {
                             viewModel.refreshUserData()
@@ -1068,6 +1013,426 @@ fun MainScreen(
                         onClick = { showRenewDialog = false }
                     ) {
                         Text("بستن", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    // --- DIALOG: Redeem License / Voucher Dialog ---
+    if (showRedeemLicenseDialog) {
+        var licenseCodeInput by remember { mutableStateOf("") }
+        val clipboardManager = LocalClipboardManager.current
+        val isLoading = redeemLicenseState is RedeemLicenseUiState.Loading
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!isLoading) {
+                    showRedeemLicenseDialog = false
+                    viewModel.resetRedeemLicenseState()
+                }
+            },
+            containerColor = Color(0xFF0F172A),
+            shape = RoundedCornerShape(22.dp),
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(
+                        onClick = {
+                            if (!isLoading) {
+                                showRedeemLicenseDialog = false
+                                viewModel.resetRedeemLicenseState()
+                            }
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "بستن",
+                            tint = Color(0xFF94A3B8)
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "تمدید با کد لایسنس / ووچر",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Right
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10B981).copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ConfirmationNumber,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "کد لایسنس یا ووچر خریداری‌شده را جهت تمدید اعتبار اشتراک در کادر زیر وارد نمایید:",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Right,
+                        lineHeight = 19.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Username indicator
+                    session?.username?.let { u ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF1E293B), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = u,
+                                color = brandCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = "حساب کاربری فعال:",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    // License Code Input Field
+                    OutlinedTextField(
+                        value = licenseCodeInput,
+                        onValueChange = { input ->
+                            licenseCodeInput = input.uppercase(Locale.ENGLISH)
+                            if (redeemLicenseState !is RedeemLicenseUiState.Idle && redeemLicenseState !is RedeemLicenseUiState.Loading) {
+                                viewModel.resetRedeemLicenseState()
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("license_code_input"),
+                        textStyle = TextStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            letterSpacing = 2.sp
+                        ),
+                        placeholder = {
+                            Text(
+                                text = "مثال: GMB-VOUCHER-XXXX",
+                                color = Color(0xFF64748B),
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        },
+                        singleLine = true,
+                        enabled = !isLoading,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF10B981),
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedContainerColor = Color(0xFF090E17),
+                            unfocusedContainerColor = Color(0xFF090E17)
+                        ),
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Key,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (licenseCodeInput.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { licenseCodeInput = "" },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "پاک کردن",
+                                            tint = Color(0xFF94A3B8),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = {
+                                        val clipText = clipboardManager.getText()?.text
+                                        if (!clipText.isNullOrBlank()) {
+                                            licenseCodeInput = clipText.trim().uppercase(Locale.ENGLISH)
+                                            if (redeemLicenseState !is RedeemLicenseUiState.Idle) {
+                                                viewModel.resetRedeemLicenseState()
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .testTag("paste_voucher_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentPaste,
+                                        contentDescription = "جای‌گذاری از کلیپ‌بورد",
+                                        tint = brandCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Direct link to purchase voucher on gmb-net.ir if user doesn't have one
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://gmb-net.ir"))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "خطا در باز کردن مرورگر", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .background(Color(0xFF0F1B33), RoundedCornerShape(10.dp))
+                            .border(BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.4f)), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ShoppingBag,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "کد لایسنس ندارید؟ خرید آنی از فروشگاه",
+                            color = Color(0xFF93C5FD),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Status Messages (Loading, Success, Error)
+                    when (val state = redeemLicenseState) {
+                        is RedeemLicenseUiState.Loading -> {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF1E293B), RoundedCornerShape(10.dp))
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = Color(0xFF10B981),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "در حال ارسال و اعتبارسنجی لایسنس در سرور...",
+                                    color = Color(0xFFCBD5E1),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        is RedeemLicenseUiState.Success -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF064E3B).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, Color(0xFF10B981), RoundedCornerShape(12.dp))
+                                    .padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = state.message,
+                                        color = Color(0xFFA7F3D0),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color(0xFF10B981),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                if (state.daysAdded != null && state.daysAdded > 0) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "اعتبار اضافه شده: ${state.daysAdded} روز",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                                if (state.volumeGBAdded != null && state.volumeGBAdded > 0) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "حجم اضافه شده: ${state.volumeGBAdded} گیگابایت",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        is RedeemLicenseUiState.Error -> {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF450A0A).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, neonRed.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = neonRed,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = state.errorMessage,
+                                    color = Color(0xFFFCA5A5),
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Right,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        else -> {}
+                    }
+
+                    // Action Buttons
+                    if (redeemLicenseState is RedeemLicenseUiState.Success) {
+                        Button(
+                            onClick = {
+                                showRedeemLicenseDialog = false
+                                viewModel.resetRedeemLicenseState()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("close_success_redeem_button"),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "تایید و بستن",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                viewModel.redeemLicense(licenseCodeInput)
+                            },
+                            enabled = !isLoading && licenseCodeInput.isNotBlank(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("confirm_redeem_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF10B981),
+                                disabledContainerColor = Color(0xFF10B981).copy(alpha = 0.35f)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "در حال تمدید...",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "تایید و تمدید اشتراک",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        TextButton(
+                            onClick = {
+                                if (!isLoading) {
+                                    showRedeemLicenseDialog = false
+                                    viewModel.resetRedeemLicenseState()
+                                }
+                            }
+                        ) {
+                            Text("انصراف", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                        }
                     }
                 }
             },

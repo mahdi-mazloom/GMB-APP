@@ -7,8 +7,11 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
@@ -80,8 +83,6 @@ fun LoginScreen(
     var rememberMe by remember { mutableStateOf(true) }
     var localValidationMsg by remember { mutableStateOf<String?>(null) }
 
-    // Direct checkout state: English username and phone before payment
-    var showDirectPurchaseSheet by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -363,29 +364,13 @@ fun LoginScreen(
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        // Background subtle Shield
-                                        Icon(
-                                            imageVector = Icons.Outlined.Shield,
-                                            contentDescription = null,
-                                            tint = brandCyan.copy(alpha = 0.2f),
-                                            modifier = Modifier.size(46.dp)
-                                        )
-
-                                        // Central Security Lock Icon
-                                        Icon(
-                                            imageVector = Icons.Default.Lock,
-                                            contentDescription = "VPN Security Lock",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-
-                                        // Small Keyhole Glow Indicator
-                                        Box(
+                                        Image(
+                                            painter = painterResource(id = R.drawable.gmb_logo),
+                                            contentDescription = "GMB NET Logo",
                                             modifier = Modifier
-                                                .padding(top = 8.dp)
-                                                .size(5.dp)
-                                                .clip(CircleShape)
-                                                .background(neonElectric)
+                                                .fillMaxSize()
+                                                .padding(6.dp)
+                                                .clip(RoundedCornerShape(18.dp))
                                         )
                                     }
                                 }
@@ -726,32 +711,51 @@ fun LoginScreen(
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(20.dp))
+                                Spacer(modifier = Modifier.height(18.dp))
 
-                                // Buy Subscription Action Button / Link
-                                OutlinedButton(
-                                    onClick = { showDirectPurchaseSheet = true },
+                                // Informational Text
+                                Text(
+                                    text = "جهت دریافت نام کاربری و رمز عبور ابتدا اشتراک تهیه کنید",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Buy Subscription Action Button
+                                Button(
+                                    onClick = {
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://gmb-net.ir"))
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "خطا در باز کردن مرورگر", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(46.dp),
+                                        .height(48.dp)
+                                        .testTag("buy_subscription_login_button"),
                                     shape = RoundedCornerShape(14.dp),
-                                    border = BorderStroke(1.dp, Color(0xFF243A62)),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = Color(0xFF0F1B33).copy(alpha = 0.6f)
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF2563EB)
                                     )
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.ShoppingCart,
+                                        imageVector = Icons.Default.ShoppingBag,
                                         contentDescription = null,
-                                        tint = brandCyan,
-                                        modifier = Modifier.size(17.dp)
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "خرید اشتراک جدید و تحویل آنی",
-                                        color = Color(0xFFE2E8F0),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold
+                                        text = "خرید اشتراک",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
@@ -816,669 +820,6 @@ fun LoginScreen(
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center
                     )
-                }
-            }
-        }
-
-        // ==========================================
-        // DIRECT PURCHASE & INSTANT DELIVERY SHEET
-        // ==========================================
-        if (showDirectPurchaseSheet) {
-            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            var directUsername by remember { mutableStateOf("") }
-            var directPhone by remember { mutableStateOf("") }
-            var selectedPlanIndex by remember { mutableIntStateOf(1) } // Default 3 months
-            var currentCheckoutStep by remember { mutableIntStateOf(1) } // 1 = Info & Plan, 2 = Payment & Delivery
-            var trackingNumber by remember { mutableStateOf("") }
-            var cardCopied by remember { mutableStateOf(false) }
-            var shabaCopied by remember { mutableStateOf(false) }
-            var isCreatingSession by remember { mutableStateOf(false) }
-
-            val plans = listOf(
-                Triple("اشتراک ۱ ماهه", "۵۰۰,۰۰۰ تومان", 30),
-                Triple("اشتراک ۳ ماهه ⭐", "۱,۳۰۰,۰۰۰ تومان", 90),
-                Triple("اشتراک ۶ ماهه", "۲,۴۰۰,۰۰۰ تومان", 180),
-                Triple("اشتراک ۱ ساله ویژه", "۴,۲۰۰,۰۰۰ تومان", 365)
-            )
-
-            val chosenPlan = plans[selectedPlanIndex]
-            val isUsernameValid = directUsername.trim().length >= 3
-            val isPhoneValid = directPhone.startsWith("09") && directPhone.length == 11
-
-            ModalBottomSheet(
-                onDismissRequest = { showDirectPurchaseSheet = false },
-                sheetState = sheetState,
-                containerColor = Color(0xFF080E1C),
-                scrimColor = Color.Black.copy(alpha = 0.85f),
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                dragHandle = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 10.dp, bottom = 6.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(48.dp)
-                                .height(5.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF334155))
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxHeight(0.95f)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp)
-                        .navigationBarsPadding()
-                        .padding(bottom = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // Header
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = { showDirectPurchaseSheet = false },
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Color(0xFF162032))
-                                .size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "بستن",
-                                tint = Color(0xFF94A3B8),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = if (currentCheckoutStep == 1) "خرید اشتراک جدید و تحویل آنی" else "پرداخت و دریافت آنی اشتراک",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = if (currentCheckoutStep == 1) "مرحله ۱: دریافت نام کاربری و شماره تلفن" else "مرحله ۲: واریز و فعال‌سازی فوری",
-                                color = brandCyan,
-                                fontSize = 11.sp
-                            )
-                        }
-
-                        Surface(
-                            color = neonGreen.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "تحویل آنی",
-                                color = neonGreen,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-
-                    if (currentCheckoutStep == 1) {
-                        // ==========================================
-                        // STEP 1: USERNAME (ENGLISH) + PHONE + PLAN
-                        // ==========================================
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(18.dp)),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                            shape = RoundedCornerShape(18.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "۱. نام کاربری به انگلیسی",
-                                        color = Color.White,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "حداقل ۳ حرف",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 11.sp
-                                    )
-                                }
-
-                                // English Username Input
-                                OutlinedTextField(
-                                    value = directUsername,
-                                    onValueChange = { input ->
-                                        // Only English letters, digits, and underscores
-                                        directUsername = input.filter { ch ->
-                                            (ch in 'a'..'z') || (ch in 'A'..'Z') || (ch in '0'..'9') || ch == '_'
-                                        }
-                                    },
-                                    placeholder = {
-                                        Text("مثال: user123 (فقط حروف انگلیسی)", color = Color(0xFF475569), fontSize = 12.sp)
-                                    },
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        textAlign = TextAlign.Left
-                                    ),
-                                    supportingText = {
-                                        Text(
-                                            text = if (isUsernameValid) "✓ نام کاربری معتبر است" else "نام کاربری اشتراک باید به انگلیسی باشد",
-                                            color = if (isUsernameValid) neonGreen else Color(0xFF94A3B8),
-                                            fontSize = 11.sp
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Person,
-                                            contentDescription = null,
-                                            tint = brandCyan,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = brandCyan,
-                                        unfocusedBorderColor = Color(0xFF1E2E4A),
-                                        focusedContainerColor = Color(0xFF090E1C),
-                                        unfocusedContainerColor = Color(0xFF090E1C)
-                                    ),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "۲. شماره تلفن همراه",
-                                        color = Color.White,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "جهت ارسال پیامک و مشخصات",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 11.sp
-                                    )
-                                }
-
-                                // Phone Number Input
-                                OutlinedTextField(
-                                    value = directPhone,
-                                    onValueChange = { input ->
-                                        directPhone = input.filter { it.isDigit() }.take(11)
-                                    },
-                                    placeholder = {
-                                        Text("مثال: ۰۹۱۲۳۴۵۶۷۸۹ (۱۱ رقمی)", color = Color(0xFF475569), fontSize = 12.sp)
-                                    },
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        textAlign = TextAlign.Left
-                                    ),
-                                    supportingText = {
-                                        Text(
-                                            text = if (isPhoneValid) "✓ شماره موبایل تایید شد" else "شماره ۱۱ رقمی همراه با شروع ۰۹",
-                                            color = if (isPhoneValid) neonGreen else Color(0xFF94A3B8),
-                                            fontSize = 11.sp
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.PhoneAndroid,
-                                            contentDescription = null,
-                                            tint = brandCyan,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = brandCyan,
-                                        unfocusedBorderColor = Color(0xFF1E2E4A),
-                                        focusedContainerColor = Color(0xFF090E1C),
-                                        unfocusedContainerColor = Color(0xFF090E1C)
-                                    ),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-
-                        // Select Plan
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(18.dp)),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                            shape = RoundedCornerShape(18.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(
-                                    text = "۳. انتخاب مدت اشتراک:",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                plans.forEachIndexed { index, plan ->
-                                    val isSelected = selectedPlanIndex == index
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isSelected) brandCyan.copy(alpha = 0.12f) else Color(0xFF0A0F1E))
-                                            .border(
-                                                1.dp,
-                                                if (isSelected) brandCyan else Color(0xFF1E2D4A),
-                                                RoundedCornerShape(12.dp)
-                                            )
-                                            .clickable { selectedPlanIndex = index }
-                                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        RadioButton(
-                                            selected = isSelected,
-                                            onClick = { selectedPlanIndex = index },
-                                            colors = RadioButtonDefaults.colors(selectedColor = brandCyan)
-                                        )
-
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(
-                                                text = plan.first,
-                                                color = if (isSelected) brandCyan else Color.White,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = plan.second,
-                                                color = if (isSelected) Color(0xFF38BDF8) else Color(0xFF94A3B8),
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Proceed Button
-                        Button(
-                            onClick = {
-                                if (isUsernameValid && isPhoneValid) {
-                                    currentCheckoutStep = 2
-                                } else {
-                                    Toast.makeText(context, "لطفاً نام کاربری انگلیسی و شماره تلفن معتبر وارد فرمایید", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            enabled = isUsernameValid && isPhoneValid,
-                            colors = ButtonDefaults.buttonColors(containerColor = brandCyan),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    tint = Color(0xFF041021),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "تایید و رفتن به پرداخت و تحویل",
-                                    color = Color(0xFF041021),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        TextButton(onClick = {
-                            showDirectPurchaseSheet = false
-                            onNavigateToPurchase()
-                        }) {
-                            Text("مشاهده صفحه کامل پلن‌ها و امکانات", color = Color(0xFF64748B), fontSize = 12.sp)
-                        }
-
-                    } else {
-                        // ==========================================
-                        // STEP 2: PAYMENT & INSTANT DELIVERY
-                        // ==========================================
-                        // Selected user & plan recap
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(16.dp)),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1629)),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = directUsername,
-                                        color = brandCyan,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                    Text(
-                                        text = "نام کاربری اشتراک:",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 12.sp
-                                    )
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = directPhone,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 13.sp
-                                    )
-                                    Text(
-                                        text = "شماره تماس:",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 12.sp
-                                    )
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "${chosenPlan.first} • ${chosenPlan.second}",
-                                        color = Color(0xFFF59E0B),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
-                                    Text(
-                                        text = "پلن انتخابی:",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            }
-                        }
-
-                        // Bank Card Info
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(16.dp)),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0A1224)),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(
-                                    text = "اطلاعات کارت جهت واریز وجه:",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
-                                )
-
-                                // Card number box
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(Color(0xFF0F1A30))
-                                        .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(10.dp))
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Button(
-                                        onClick = {
-                                            clipboardManager.setText(AnnotatedString("6037997514238890"))
-                                            cardCopied = true
-                                            Toast.makeText(context, "شماره کارت کپی شد", Toast.LENGTH_SHORT).show()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2E4A)),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(if (cardCopied) "کپی شد ✓" else "کپی کارت", color = brandCyan, fontSize = 11.sp)
-                                    }
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text("۶۰۳۷ - ۹۹۷۵ - ۱۴۲۳ - ۸۸۹۰", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Text("بانک ملی ایران • به نام گمبرون نت", color = Color(0xFF94A3B8), fontSize = 10.sp)
-                                    }
-                                }
-
-                                // Shaba box
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(Color(0xFF0F1A30))
-                                        .border(1.dp, Color(0xFF1E2E4A), RoundedCornerShape(10.dp))
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Button(
-                                        onClick = {
-                                            clipboardManager.setText(AnnotatedString("IR820170000000123456789012"))
-                                            shabaCopied = true
-                                            Toast.makeText(context, "شماره شبا کپی شد", Toast.LENGTH_SHORT).show()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2E4A)),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(if (shabaCopied) "کپی شد ✓" else "کپی شبا", color = brandCyan, fontSize = 11.sp)
-                                    }
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text("IR82 0170 0000 0012 3456 7890 12", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                        Text("شماره شبا پایا / ساتنا", color = Color(0xFF94A3B8), fontSize = 10.sp)
-                                    }
-                                }
-
-                                // Tracking input
-                                OutlinedTextField(
-                                    value = trackingNumber,
-                                    onValueChange = { trackingNumber = it },
-                                    label = { Text("شماره پیگیری / کد ارجاع تراکنش (اختیاری)", fontSize = 11.sp) },
-                                    placeholder = { Text("مثال: ۱۲۳۴۵۶", color = Color(0xFF475569), fontSize = 11.sp) },
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(
-                                        color = Color.White,
-                                        fontSize = 13.sp,
-                                        textAlign = TextAlign.Right
-                                    ),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = brandCyan,
-                                        unfocusedBorderColor = Color(0xFF1E2E4A),
-                                        focusedContainerColor = Color(0xFF090E1C),
-                                        unfocusedContainerColor = Color(0xFF090E1C)
-                                    ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                // Send to Telegram Button
-                                Button(
-                                    onClick = {
-                                        try {
-                                            val invoiceMsg = buildString {
-                                                append("سلام، درخواست خرید و تحویل آنی اشتراک GMB NET:\n")
-                                                append("👤 نام کاربری: $directUsername\n")
-                                                append("📱 شماره همراه: $directPhone\n")
-                                                append("📦 پلن: ${chosenPlan.first}\n")
-                                                append("💰 مبلغ: ${chosenPlan.second}\n")
-                                                if (trackingNumber.isNotBlank()) append("🔢 کد پیگیری: $trackingNumber\n")
-                                                append("📅 تاریخ: ${PersianDateHelper.getExpiryDateShamsiFormatted(0)}")
-                                            }
-                                            val intent = Intent(
-                                                Intent.ACTION_VIEW,
-                                                Uri.parse("https://t.me/GMB_NET_Support?text=" + Uri.encode(invoiceMsg))
-                                            )
-                                            context.startActivity(intent)
-                                        } catch (_: Exception) {
-                                            clipboardManager.setText(AnnotatedString("@GMB_NET_Support"))
-                                            Toast.makeText(context, "آیدی تلگرام کپی شد: @GMB_NET_Support", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Send,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("ارسال مشخصات به پشتیبانی تلگرام", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        // Instant Activate and Delivery Action Button!
-                        Button(
-                            onClick = {
-                                isCreatingSession = true
-                                coroutineScope.launch {
-                                    val db = AppDatabase.getDatabase(context)
-                                    val days = chosenPlan.third
-                                    val finishDateShamsi = PersianDateHelper.getExpiryDateShamsiFormatted(days)
-                                    val newSession = UserSession(
-                                        id = 1,
-                                        username = directUsername.trim(),
-                                        token = "token_${System.currentTimeMillis()}",
-                                        remainingDays = days,
-                                        finishDate = "",
-                                        shamsiFinishDate = finishDateShamsi,
-                                        consumedTrafficMb = 0L,
-                                        totalTrafficMb = 100L * 1024L,
-                                        status = "active",
-                                        sshHost = "gmb.server-vip.net",
-                                        sshPort = 443,
-                                        sshUsername = directUsername.trim(),
-                                        sshPassword = "gmb_pass_${directUsername.trim()}",
-                                        apiBaseUrl = "https://gmb.server-vip.net"
-                                    )
-                                    db.userSessionDao().saveSession(newSession)
-                                    Toast.makeText(
-                                        context,
-                                        "اشتراک جدید شما برای نام کاربری ${directUsername.trim()} با موفقیت تحویل داده شد و در برنامه فعال گردید!",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    SshVpnService.currentHost = newSession.sshHost
-                                    SshVpnService.currentPort = newSession.sshPort
-                                    SshVpnService.currentUser = newSession.sshUsername
-                                    SshVpnService.currentPass = newSession.sshPassword
-                                    SshVpnService.currentUdpgwPort = newSession.udpgwPort
-                                    isCreatingSession = false
-                                    showDirectPurchaseSheet = false
-                                    onNavigateToMain()
-                                }
-                            },
-                            enabled = !isCreatingSession,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                        ) {
-                            if (isCreatingSession) {
-                                CircularProgressIndicator(
-                                    color = Color.White,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            } else {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = neonGreen,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "تایید پرداخت و تحویل فوری در برنامه",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
-                            }
-                        }
-
-                        // Back to edit info
-                        TextButton(onClick = { currentCheckoutStep = 1 }) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = null,
-                                    tint = Color(0xFF94A3B8),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text("بازگشت و ویرایش نام کاربری و شماره", color = Color(0xFF94A3B8), fontSize = 12.sp)
-                            }
-                        }
-                    }
                 }
             }
         }

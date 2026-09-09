@@ -9,12 +9,16 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.database.AppDatabase
 import com.example.data.database.UserSession
 import com.example.data.database.VpnLog
+import com.example.data.remote.LicenseApi
+import com.example.data.remote.RedeemLicenseRequest
+import com.example.data.remote.RedeemLicenseResponse
 import com.example.data.remote.ShahanPanelClient
 import com.example.util.AppUpdateInfo
 import com.example.util.AppUpdateManager
 import com.example.util.PersianDateHelper
 import com.example.vpn.SshVpnService
 import com.example.vpn.VpnStatus
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -24,6 +28,10 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
 
     private val _loginState = MutableStateFlow<LoginState>(LoginState.Idle)
     val loginState: StateFlow<LoginState> = _loginState.asStateFlow()
+
+    // License / Voucher Redemption States
+    private val _redeemLicenseState = MutableStateFlow<RedeemLicenseUiState>(RedeemLicenseUiState.Idle)
+    val redeemLicenseState: StateFlow<RedeemLicenseUiState> = _redeemLicenseState.asStateFlow()
 
     val activeSession: StateFlow<UserSession?> = database.userSessionDao().getActiveSession()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -69,7 +77,11 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
             }
             // Check for updates in background
             delay(2000)
-            checkForAppUpdates(currentVersionCode = 1, isManual = false)
+            checkForAppUpdates(
+                currentVersionCode = com.example.BuildConfig.VERSION_CODE,
+                currentVersionName = com.example.BuildConfig.VERSION_NAME,
+                isManual = false
+            )
         }
     }
 
@@ -358,10 +370,17 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
         _updateNotification.value = null
     }
 
-    fun checkForAppUpdates(currentVersionCode: Int = 1, isManual: Boolean = false) {
+    fun checkForAppUpdates(
+        currentVersionCode: Int = com.example.BuildConfig.VERSION_CODE,
+        currentVersionName: String = com.example.BuildConfig.VERSION_NAME,
+        isManual: Boolean = false
+    ) {
         viewModelScope.launch(Dispatchers.IO) {
             _isCheckingUpdate.value = true
-            val result = AppUpdateManager.checkUpdate(currentVersionCode)
+            val result = AppUpdateManager.checkUpdate(
+                currentVersionCode = currentVersionCode,
+                currentVersionName = currentVersionName
+            )
             _isCheckingUpdate.value = false
             result.onSuccess { update ->
                 _availableUpdate.value = update
@@ -404,6 +423,10 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
                     _updateDownloadProgress.value = progress
                 }
             )
+            result.onSuccess {
+                _availableUpdate.value = null
+                _updateDownloadProgress.value = null
+            }
             result.onFailure { error ->
                 _updateDownloadProgress.value = null
                 _updateNotification.value = "خطا در دانلود و نصب: ${error.message}"
@@ -420,6 +443,77 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
     fun logError(message: String) {
         viewModelScope.launch(Dispatchers.IO) {
             database.vpnLogDao().insertLog(VpnLog(message = message, level = "ERROR"))
+        }
+    }
+
+    fun resetRedeemLicenseState() {
+        _redeemLicenseState.value = RedeemLicenseUiState.Idle
+    }
+
+    fun redeemLicense(code: String) {
+        val trimmedCode = code.trim().uppercase(Locale.ENGLISH)
+        if (trimmedCode.isBlank()) {
+            _redeemLicenseState.value = RedeemLicenseUiState.Error("لطفاً کد لایسنس را وارد کنید.")
+            return
+        }
+
+        val session = activeSession.value
+        val username = session?.username
+        if (username.isNullOrBlank()) {
+            _redeemLicenseState.value = RedeemLicenseUiState.Error("حساب کاربری فعالی یافت نشد. لطفاً مجدداً وارد شوید.")
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _redeemLicenseState.value = RedeemLicenseUiState.Loading
+            try {
+                val baseUrl = _apiBaseUrl.value
+                val api = LicenseApi.create(baseUrl)
+                val request = RedeemLicenseRequest(username = username, code = trimmedCode)
+                val response = api.redeemLicense(request)
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val body = response.body()!!
+                    val successMsg = body.message?.takeIf { it.isNotBlank() }
+                        ?: "حساب شما با موفقیت تمدید شد."
+                    _redeemLicenseState.value = RedeemLicenseUiState.Success(
+                        message = successMsg,
+                        daysAdded = body.daysAdded,
+                        volumeGBAdded = body.volumeGBAdded
+                    )
+                    // Immediately refresh user subscription data from server
+                    refreshUserData()
+                } else {
+                    var errorMsg: String? = response.body()?.error
+                    val errorBodyStr = try {
+                        response.errorBody()?.string()
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (errorMsg.isNullOrBlank() && !errorBodyStr.isNullOrBlank()) {
+                        try {
+                            val json = org.json.JSONObject(errorBodyStr)
+                            errorMsg = json.optString("error").takeIf { it.isNotBlank() }
+                                ?: json.optString("message").takeIf { it.isNotBlank() }
+                        } catch (e: Exception) {
+                            // Fallback
+                        }
+                    }
+                    if (errorMsg.isNullOrBlank()) {
+                        errorMsg = when (response.code()) {
+                            400 -> "کد لایسنس وارد شده نامعتبر است یا قبلاً استفاده شده است."
+                            404 -> "کد لایسنس یا نام کاربری در سرور یافت نشد."
+                            403 -> "دسترسی به سرور جهت ثبت لایسنس مجاز نیست."
+                            else -> "خطا در تمدید اشتراک (${response.code()})"
+                        }
+                    }
+                    _redeemLicenseState.value = RedeemLicenseUiState.Error(errorMsg)
+                }
+            } catch (e: Exception) {
+                _redeemLicenseState.value = RedeemLicenseUiState.Error(
+                    "خطا در برقراری ارتباط با سرور: ${e.localizedMessage ?: e.message ?: "عدم پاسخگویی سرور"}"
+                )
+            }
         }
     }
 
@@ -441,4 +535,15 @@ sealed class LoginState {
     object Success : LoginState()
     data class Error(val error: String) : LoginState()
     data class VpnPermissionRequired(val intent: Intent) : LoginState()
+}
+
+sealed class RedeemLicenseUiState {
+    object Idle : RedeemLicenseUiState()
+    object Loading : RedeemLicenseUiState()
+    data class Success(
+        val message: String,
+        val daysAdded: Int? = null,
+        val volumeGBAdded: Int? = null
+    ) : RedeemLicenseUiState()
+    data class Error(val errorMessage: String) : RedeemLicenseUiState()
 }

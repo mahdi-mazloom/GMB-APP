@@ -51,10 +51,38 @@ object AppUpdateManager {
         .build()
 
     /**
+     * Helper to compare semantic versions (e.g. "1.2.1" > "1.2.0").
+     */
+    fun isNewerVersion(remoteVersion: String, currentVersion: String): Boolean {
+        try {
+            val cleanRemote = remoteVersion.trim().removePrefix("v").removePrefix("V").trim()
+            val cleanCurrent = currentVersion.trim().removePrefix("v").removePrefix("V").trim()
+            if (cleanRemote.isBlank() || cleanRemote.equals(cleanCurrent, ignoreCase = true)) {
+                return false
+            }
+
+            val rParts = cleanRemote.split(".").map { it.filter { ch -> ch.isDigit() }.toIntOrNull() ?: 0 }
+            val cParts = cleanCurrent.split(".").map { it.filter { ch -> ch.isDigit() }.toIntOrNull() ?: 0 }
+            val maxLen = maxOf(rParts.size, cParts.size)
+
+            for (i in 0 until maxLen) {
+                val r = rParts.getOrElse(i) { 0 }
+                val c = cParts.getOrElse(i) { 0 }
+                if (r > c) return true
+                if (r < c) return false
+            }
+            return false
+        } catch (e: Exception) {
+            return false
+        }
+    }
+
+    /**
      * Checks remote server or GitHub for available updates.
      */
     suspend fun checkUpdate(
-        currentVersionCode: Int,
+        currentVersionCode: Int = com.example.BuildConfig.VERSION_CODE,
+        currentVersionName: String = com.example.BuildConfig.VERSION_NAME,
         customUrl: String? = null
     ): Result<AppUpdateInfo?> = withContext(Dispatchers.IO) {
         try {
@@ -72,11 +100,11 @@ object AppUpdateManager {
             if (!response.isSuccessful) {
                 // If GitHub raw version.json returned 404, fallback to GitHub Releases API
                 if (targetUrl == GITHUB_RAW_VERSION_URL) {
-                    return@withContext checkUpdate(currentVersionCode, GITHUB_RELEASES_URL)
+                    return@withContext checkUpdate(currentVersionCode, currentVersionName, GITHUB_RELEASES_URL)
                 }
                 // If GitHub Releases also failed, fallback to domain URL
                 if (targetUrl == GITHUB_RELEASES_URL) {
-                    return@withContext checkUpdate(currentVersionCode, DEFAULT_VERSION_URL)
+                    return@withContext checkUpdate(currentVersionCode, currentVersionName, DEFAULT_VERSION_URL)
                 }
                 return@withContext Result.success(null)
             }
@@ -93,9 +121,13 @@ object AppUpdateManager {
 
             // If GitHub Releases API format (tag_name / assets)
             if (json.has("tag_name")) {
-                val tagName = json.optString("tag_name", "").removePrefix("v")
-                latestName = tagName
-                latestCode = tagName.replace(".", "").toIntOrNull() ?: (currentVersionCode + 1)
+                val rawTag = json.optString("tag_name", "").trim()
+                val tagName = rawTag.removePrefix("v").removePrefix("V").trim()
+                latestName = if (tagName.isNotBlank()) tagName else rawTag
+                if (latestCode <= 0) {
+                    val numbersOnly = tagName.filter { it.isDigit() }
+                    latestCode = numbersOnly.toIntOrNull() ?: 0
+                }
                 changelog = json.optString("body", "• بهبود عملکرد و سرعت برنامه\n• بهینه‌سازی ارتباط و رفع اشکالات")
                 val assets = json.optJSONArray("assets")
                 if (assets != null && assets.length() > 0) {
@@ -116,10 +148,24 @@ object AppUpdateManager {
                 }
             }
 
-            if (latestCode > currentVersionCode && downloadUrl.isNotBlank()) {
+            // Accurate update check:
+            // An update is ONLY valid if the remote version is strictly newer than the current version!
+            val isRemoteNameNewer = isNewerVersion(latestName, currentVersionName)
+            val isRemoteCodeNewer = latestCode > currentVersionCode && latestCode > 0
+            val isSameOrOlderName = latestName.isNotBlank() && !isRemoteNameNewer
+
+            val hasUpdate = if (isRemoteNameNewer) {
+                true
+            } else if (isRemoteCodeNewer && !isSameOrOlderName) {
+                true
+            } else {
+                false
+            }
+
+            if (hasUpdate && downloadUrl.isNotBlank()) {
                 val updateInfo = AppUpdateInfo(
                     latestVersionCode = latestCode,
-                    latestVersionName = latestName.ifBlank { "1.1.0" },
+                    latestVersionName = latestName.ifBlank { "1.2.1" },
                     isForceUpdate = isForce,
                     changelog = changelog.ifBlank { "• بهبود عملکرد و افزایش سرعت اتصال\n• رفع باگ‌های گزارش‌شده" },
                     downloadUrl = downloadUrl,
