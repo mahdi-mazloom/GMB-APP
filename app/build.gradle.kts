@@ -14,8 +14,8 @@ android {
     applicationId = "com.gmbnet.app"
     minSdk = 24
     targetSdk = 35
-    versionCode = 5
-    versionName = "1.3.1"
+    versionCode = 6
+    versionName = "1.4.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -46,10 +46,7 @@ android {
       signingConfig = signingConfigs.getByName("debugConfig")
     }
     debug {
-      isMinifyEnabled = true
-      isShrinkResources = true
-      isDebuggable = false
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      isDebuggable = true
       signingConfig = signingConfigs.getByName("debugConfig")
     }
   }

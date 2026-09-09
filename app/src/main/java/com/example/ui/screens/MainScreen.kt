@@ -29,8 +29,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -136,10 +139,12 @@ fun MainScreen(
         }
     }
 
-    // Modern High-Tech Space-Dark Theme Colors
-    val deepNavyBg = Color(0xFF070B14)
+    // Modern 2026 Cyber Obsidian & Electric Glass Design System
+    val deepNavyBg = Color(0xFF060912)
+    val surfaceElevatedColor = Color(0xFF0E172A)
     val borderStrokeColor = Color(0xFF1E293B)
-    val brandCyan = Color(0xFF38BDF8)
+    val brandCyan = Color(0xFF00E5FF)
+    val electricSky = Color(0xFF38BDF8)
     val brandPurple = Color(0xFFA855F7)
     val neonGreen = Color(0xFF10B981)
     val neonOrange = Color(0xFFF97316)
@@ -148,8 +153,8 @@ fun MainScreen(
 
     val cardGradient = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF0F182D),
-            Color(0xFF0A0F1E)
+            Color(0xFF111C32),
+            Color(0xFF090F1C)
         )
     )
 
@@ -166,79 +171,141 @@ fun MainScreen(
         label = "aura_color"
     )
 
-    // Pulsing halo animation for connecting status
+    // Pulsing halo and rotating orbital animations for next-gen cyber feel
     val infiniteTransition = rememberInfiniteTransition(label = "halo_transition")
     val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.65f,
+        initialValue = 0.20f,
+        targetValue = 0.70f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse_alpha"
+    )
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_scale"
+    )
+    val orbitRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = if (status == VpnStatus.CONNECTING) 2400 else 12000,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "orbit_rotation"
     )
 
     Scaffold(
         containerColor = deepNavyBg,
         topBar = {
+            // Modern Floating Glass Header with blur-like aesthetics and rim lighting
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(deepNavyBg)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color(0xFF0B1222),
+                                deepNavyBg
+                            )
+                        )
+                    )
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xCC0E1729),
+                    border = BorderStroke(1.dp, Color(0x2E38BDF8)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Logout button with confirmation dialog
-                    IconButton(onClick = { showLogoutDialog = true }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = "خروج از حساب",
-                            tint = Color(0xFF94A3B8)
-                        )
-                    }
-
-                    // Centered App Identity
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.gmb_logo),
-                            contentDescription = "GMB NET Logo",
+                        // Logout button with subtle glass ring
+                        IconButton(
+                            onClick = { showLogoutDialog = true },
                             modifier = Modifier
-                                .size(24.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                        )
-                        Text(
-                            text = "GMB NET",
-                            fontSize = 17.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
+                                .size(38.dp)
                                 .clip(CircleShape)
-                                .background(if (isExpired) neonRed else if (status == VpnStatus.CONNECTED) neonGreen else brandCyan)
-                        )
-                    }
+                                .background(Color(0xFF131F35))
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "خروج از حساب",
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
 
-                    // Action button: Store & License Modal
-                    IconButton(
-                        onClick = { showRenewDialog = true },
-                        modifier = Modifier.testTag("top_shop_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ShoppingBag,
-                            contentDescription = "فروشگاه و تمدید اشتراک",
-                            tint = if (isExpired) neonRed else Color(0xFF38BDF8)
-                        )
+                        // Centered App Identity with glowing beacon
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.gmb_logo),
+                                contentDescription = "GMB NET Logo",
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                            )
+                            Text(
+                                text = "GMB NET",
+                                fontSize = 17.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.5.sp
+                            )
+                            // Glowing status beacon
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isExpired) neonRed else if (status == VpnStatus.CONNECTED) neonGreen else brandCyan)
+                            )
+                        }
+
+                        // Action button: Store & License Modal with subtle cyan pill
+                        Surface(
+                            onClick = { showRenewDialog = true },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isExpired) neonRed.copy(alpha = 0.15f) else Color(0xFF0F2642),
+                            border = BorderStroke(1.dp, if (isExpired) neonRed.copy(alpha = 0.5f) else Color(0xFF0284C7).copy(alpha = 0.5f)),
+                            modifier = Modifier.testTag("top_shop_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text(
+                                    text = if (isExpired) "تمدید" else "فروشگاه",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isExpired) Color(0xFFFCA5A5) else electricSky
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ShoppingBag,
+                                    contentDescription = "فروشگاه و تمدید اشتراک",
+                                    tint = if (isExpired) neonRed else brandCyan,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -250,8 +317,9 @@ fun MainScreen(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            Color(0xFF0F172A),
-                            deepNavyBg
+                            Color(0xFF0A1224),
+                            deepNavyBg,
+                            Color(0xFF04060C)
                         )
                     )
                 )
@@ -390,60 +458,82 @@ fun MainScreen(
                     }
                 }
 
-                // 2. Central Connection Core Ring
+                // 2. Central Connection Core Ring (2026 Futuristic Cyber Core)
                 val buttonColor = when {
                     isExpired -> neonRed
                     status == VpnStatus.CONNECTED -> neonGreen
                     status == VpnStatus.CONNECTING -> neonYellow
                     status == VpnStatus.ERROR -> neonRed
-                    else -> Color(0xFF475569)
+                    else -> electricSky
                 }
 
                 val statusLabel = when {
                     isExpired -> "اشتراک منقضی شده است (اتصال مسدود)"
-                    status == VpnStatus.CONNECTED -> "اتصال امن برقرار است"
-                    status == VpnStatus.CONNECTING -> "در حال برقراری ارتباط با سرور..."
-                    status == VpnStatus.ERROR -> "خطا در اتصال - جهت تلاش مجدد لمس کنید"
-                    else -> "برای اتصال امن لمس کنید"
+                    status == VpnStatus.CONNECTED -> "اتصال با رمزگذاری سرتاسری فعال است"
+                    status == VpnStatus.CONNECTING -> "در حال برقراری ارتباط با سرور امن..."
+                    status == VpnStatus.ERROR -> "خطا در برقراری اتصال - لمس جهت تلاش مجدد"
+                    else -> "آماده اتصال - برای شروع لمس کنید"
                 }
 
                 Column(
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Outer Glow Halo
+                    // Outer Breathing Halo & Rotating Orbital Ring
                     Box(
                         modifier = Modifier
-                            .size(186.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isExpired) {
-                                    neonRed.copy(alpha = 0.15f)
-                                } else if (status == VpnStatus.CONNECTING) {
-                                    neonYellow.copy(alpha = pulseAlpha * 0.25f)
-                                } else if (status == VpnStatus.CONNECTED) {
-                                    neonGreen.copy(alpha = 0.20f)
-                                } else if (status == VpnStatus.ERROR) {
-                                    neonRed.copy(alpha = 0.20f)
-                                } else {
-                                    Color.Transparent
-                                }
-                            ),
+                            .size(208.dp),
                         contentAlignment = Alignment.Center
                     ) {
+                        // Ambient Breathing Aura
                         Box(
                             modifier = Modifier
-                                .size(174.dp)
+                                .size(if (status != VpnStatus.DISCONNECTED) 208.dp else 190.dp)
                                 .clip(CircleShape)
-                                .background(buttonColor.copy(alpha = if (isExpired) 0.12f else if (status != VpnStatus.DISCONNECTED) 0.15f else 0.08f))
-                                .border(
-                                    width = if (isExpired || status != VpnStatus.DISCONNECTED) 3.dp else 2.dp,
-                                    color = if (isExpired) neonRed.copy(alpha = 0.8f) else if (status != VpnStatus.DISCONNECTED) auraColor.copy(alpha = 0.8f) else borderStrokeColor,
-                                    shape = CircleShape
+                                .background(
+                                    when {
+                                        isExpired -> neonRed.copy(alpha = 0.16f)
+                                        status == VpnStatus.CONNECTING -> neonYellow.copy(alpha = pulseAlpha * 0.28f)
+                                        status == VpnStatus.CONNECTED -> neonGreen.copy(alpha = pulseAlpha * 0.24f)
+                                        status == VpnStatus.ERROR -> neonRed.copy(alpha = 0.22f)
+                                        else -> brandCyan.copy(alpha = 0.08f)
+                                    }
                                 )
+                        )
+
+                        // Outer Orbit Bezel with Rotating Cyber Glow Ring
+                        Box(
+                            modifier = Modifier
+                                .size(184.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF091122))
+                                .drawBehind {
+                                    if (status == VpnStatus.CONNECTED || status == VpnStatus.CONNECTING) {
+                                        // Draw futuristic rotating neon arc
+                                        drawArc(
+                                            brush = Brush.sweepGradient(
+                                                listOf(
+                                                    auraColor.copy(alpha = 0.1f),
+                                                    auraColor,
+                                                    brandCyan,
+                                                    auraColor.copy(alpha = 0.1f)
+                                                )
+                                            ),
+                                            startAngle = orbitRotation,
+                                            sweepAngle = if (status == VpnStatus.CONNECTING) 240f else 320f,
+                                            useCenter = false,
+                                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                                        )
+                                    } else {
+                                        // Subtle static ambient ring
+                                        drawCircle(
+                                            color = if (isExpired) neonRed.copy(alpha = 0.4f) else Color(0x3338BDF8),
+                                            style = Stroke(width = 1.5.dp.toPx())
+                                        )
+                                    }
+                                }
                                 .clickable {
                                     if (isExpired) {
-                                        // Block connection and immediately open renewal popup
                                         showRenewDialog = true
                                     } else {
                                         if (status == VpnStatus.CONNECTED) {
@@ -461,127 +551,247 @@ fun MainScreen(
                                 .testTag("connect_button"),
                             contentAlignment = Alignment.Center
                         ) {
+                            // Tactile Power Disc with Radial Metallic Depth
                             Box(
                                 modifier = Modifier
-                                    .size(132.dp)
+                                    .size(142.dp)
                                     .clip(CircleShape)
                                     .background(
                                         when {
                                             isExpired -> Brush.radialGradient(
-                                                listOf(neonRed.copy(alpha = 0.75f), Color(0xFF450A0A), Color(0xFF0A0F1E))
+                                                listOf(neonRed.copy(alpha = 0.85f), Color(0xFF4C0519), Color(0xFF070B14))
                                             )
                                             status == VpnStatus.CONNECTED -> Brush.radialGradient(
-                                                listOf(neonGreen.copy(alpha = 0.9f), Color(0xFF064E3B), Color(0xFF0A0F1E))
+                                                listOf(neonGreen.copy(alpha = 0.9f), Color(0xFF064E3B), Color(0xFF070B14))
                                             )
                                             status == VpnStatus.CONNECTING -> Brush.radialGradient(
-                                                listOf(neonYellow.copy(alpha = 0.85f), Color(0xFF78350F), Color(0xFF0A0F1E))
+                                                listOf(neonYellow.copy(alpha = 0.85f), Color(0xFF78350F), Color(0xFF070B14))
                                             )
                                             status == VpnStatus.ERROR -> Brush.radialGradient(
-                                                listOf(neonRed.copy(alpha = 0.85f), Color(0xFF7F1D1D), Color(0xFF0A0F1E))
+                                                listOf(neonRed.copy(alpha = 0.85f), Color(0xFF7F1D1D), Color(0xFF070B14))
                                             )
-                                            else -> Brush.verticalGradient(
-                                                listOf(Color(0xFF131B2E), Color(0xFF0A0F1E))
+                                            else -> Brush.radialGradient(
+                                                listOf(Color(0xFF1E2E4A), Color(0xFF0F1A2E), Color(0xFF070C18))
                                             )
                                         }
                                     )
                                     .border(
-                                        width = 1.5.dp,
-                                        color = if (isExpired || status != VpnStatus.DISCONNECTED) buttonColor else borderStrokeColor,
+                                        width = 2.dp,
+                                        brush = Brush.verticalGradient(
+                                            listOf(
+                                                buttonColor.copy(alpha = 0.9f),
+                                                buttonColor.copy(alpha = 0.25f)
+                                            )
+                                        ),
                                         shape = CircleShape
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
                                     Icon(
                                         imageVector = when {
                                             isExpired -> Icons.Default.Lock
-                                            status == VpnStatus.CONNECTED -> Icons.Default.CheckCircle
+                                            status == VpnStatus.CONNECTED -> Icons.Default.Shield
                                             status == VpnStatus.CONNECTING -> Icons.Default.Sync
                                             status == VpnStatus.ERROR -> Icons.Default.ErrorOutline
                                             else -> Icons.Default.PowerSettingsNew
                                         },
                                         contentDescription = "وضعیت اتصال",
-                                        tint = if (isExpired) Color(0xFFFCA5A5) else if (status != VpnStatus.DISCONNECTED) Color.White else buttonColor,
-                                        modifier = Modifier.size(38.dp)
+                                        tint = if (isExpired) Color(0xFFFCA5A5) else if (status != VpnStatus.DISCONNECTED) Color.White else brandCyan,
+                                        modifier = Modifier.size(42.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = when {
                                             isExpired -> "LOCKED"
-                                            status == VpnStatus.CONNECTED -> "ON"
-                                            status == VpnStatus.CONNECTING -> "WAIT"
-                                            status == VpnStatus.ERROR -> "ERR"
-                                            else -> "OFF"
+                                            status == VpnStatus.CONNECTED -> "CONNECTED"
+                                            status == VpnStatus.CONNECTING -> "CONNECTING"
+                                            status == VpnStatus.ERROR -> "ERROR"
+                                            else -> "START"
                                         },
                                         color = Color.White,
-                                        fontSize = 17.sp,
+                                        fontSize = 12.sp,
+                                        fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Black,
-                                        letterSpacing = 1.sp
+                                        letterSpacing = 2.sp
                                     )
                                 }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    Text(
-                        text = statusLabel,
-                        color = if (isExpired) neonRed else if (status != VpnStatus.DISCONNECTED) auraColor else Color(0xFF94A3B8),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-
-                    // Protocol badge
-                    Row(
-                        modifier = Modifier.padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    // Futuristic Status Pill with Glowing Beacon
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color(0xFF0E172A),
+                        border = BorderStroke(1.dp, auraColor.copy(alpha = 0.4f)),
+                        modifier = Modifier.padding(horizontal = 8.dp)
                     ) {
-                        Text(
-                            text = if (isExpired) "جهت فعال‌سازی، اشتراک را تمدید کنید" else "پروتکل اختصاصی • رمزگذاری پیشرفته",
-                            color = Color(0xFF64748B),
-                            fontSize = 11.sp
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = statusLabel,
+                                color = if (isExpired) Color(0xFFFCA5A5) else if (status != VpnStatus.DISCONNECTED) Color.White else Color(0xFFCBD5E1),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(9.dp)
+                                    .clip(CircleShape)
+                                    .background(buttonColor)
+                            )
+                        }
+                    }
+
+                    // Live Session Digital Stopwatch (displayed during active connection)
+                    AnimatedVisibility(
+                        visible = status == VpnStatus.CONNECTED,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xCC064E3B),
+                            border = BorderStroke(1.dp, neonGreen.copy(alpha = 0.6f)),
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = formatSeconds(secondsElapsed),
+                                    color = Color(0xFFA7F3D0),
+                                    fontSize = 13.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = "مدت اتصال",
+                                    tint = neonGreen,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "مدت اتصال:",
+                                    color = Color(0xFFD1FAE5),
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
                     }
                 }
 
-                // 3. Live Traffic & Duration Counters
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, borderStrokeColor, RoundedCornerShape(18.dp)),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    shape = RoundedCornerShape(18.dp)
+                // 3. Telemetry Cockpit (Live Traffic Counters)
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF0F1A2F),
+                    border = BorderStroke(
+                        1.dp,
+                        Brush.linearGradient(
+                            listOf(
+                                Color(0x4038BDF8),
+                                Color(0x1538BDF8),
+                                Color(0x30A855F7)
+                            )
+                        )
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(cardGradient)
-                            .padding(12.dp)
+                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
+                        // Download Telemetry Item
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            StatItem(
-                                icon = Icons.Default.ArrowDownward,
-                                title = "دانلود",
-                                value = formatBytes(rx),
-                                color = brandCyan
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(brandCyan.copy(alpha = 0.15f))
+                                    .border(1.dp, brandCyan.copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDownward,
+                                    contentDescription = "دانلود",
+                                    tint = brandCyan,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = "دریافت (دانلود)",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
                             )
-                            StatItem(
-                                icon = Icons.Default.Timer,
-                                title = "مدت زمان",
-                                value = formatSeconds(secondsElapsed),
-                                color = brandPurple
+                            Text(
+                                text = formatBytes(rx),
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
                             )
-                            StatItem(
-                                icon = Icons.Default.ArrowUpward,
-                                title = "آپلود",
-                                value = formatBytes(tx),
-                                color = neonOrange
+                        }
+
+                        // Center Divider
+                        Box(
+                            modifier = Modifier
+                                .height(38.dp)
+                                .width(1.dp)
+                                .background(Color(0xFF1E293B))
+                        )
+
+                        // Upload Telemetry Item
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(brandPurple.copy(alpha = 0.15f))
+                                    .border(1.dp, brandPurple.copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowUpward,
+                                    contentDescription = "آپلود",
+                                    tint = brandPurple,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = "ارسال (آپلود)",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = formatBytes(tx),
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -1722,71 +1932,82 @@ fun InfoStatBox(
     borderStrokeColor: Color,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0xFF0D172B),
+        border = BorderStroke(
+            1.dp,
+            Brush.linearGradient(
+                listOf(
+                    iconColor.copy(alpha = 0.45f),
+                    Color(0x1FFFFFFF),
+                    iconColor.copy(alpha = 0.15f)
+                )
+            )
+        ),
         modifier = modifier
-            .border(1.dp, borderStrokeColor, RoundedCornerShape(20.dp)),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        shape = RoundedCornerShape(20.dp)
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(cardGradient)
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.End
         ) {
-            Column(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(iconColor.copy(alpha = 0.15f))
+                        .border(1.dp, iconColor.copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(iconColor.copy(alpha = 0.12f))
-                            .border(1.dp, iconColor.copy(alpha = 0.25f), RoundedCornerShape(8.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = title,
-                            tint = iconColor,
-                            modifier = Modifier.size(17.dp)
-                        )
-                    }
-
-                    Text(
-                        text = title,
-                        color = Color(0xFF94A3B8),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = iconColor,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-
                 Text(
-                    text = value,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    textAlign = TextAlign.Right
+                    text = title,
+                    color = Color(0xFF94A3B8),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
+            }
 
-                Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
+            Text(
+                text = value,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                textAlign = TextAlign.Right
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = iconColor.copy(alpha = 0.12f),
+                border = BorderStroke(0.5.dp, iconColor.copy(alpha = 0.25f))
+            ) {
                 Text(
                     text = subtitle,
-                    color = iconColor.copy(alpha = 0.9f),
+                    color = iconColor,
                     fontSize = 10.sp,
-                    fontWeight = FontWeight.Normal,
+                    fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Right,
-                    maxLines = 1
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
         }

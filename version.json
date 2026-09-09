@@ -1,8 +1,8 @@
 {
-  "latest_version_code": 5,
-  "latest_version_name": "1.3.1",
+  "latest_version_code": 6,
+  "latest_version_name": "1.4.0",
   "is_force_update": false,
-  "changelog": "• کاهش چشمگیر حجم برنامه به کمتر از ۳ مگابایت با معماری فشرده R8\n• ارتقای امنیت برنامه و مبهم‌سازی پیشرفته در برابر نفوذ\n• خروج کامل از حالت دیباگ و افزایش سرعت نصب\n• رفع باگ باکس بهینه‌سازی باتری و امکان بستن آن\n• پایداری پروتکل ارتباطی و بهبود سرعت اتصال",
-  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.3.1/gmbnet.apk",
+  "changelog": "• بازطراحی چشم‌گیر و مدرن رابط کاربری با تم Cyber Obsidian و افکت شیشه‌ای\n• اضافه شدن حلقه چرخان نئونی و هاله تنفسی داینامیک اتصال\n• پنل وضعیت زنده اتصال و کرنومتر مونو‌اسپیس هوشمند\n• نوسازی کامل تلمتری مصرف دیتای دانلود و آپلود و کارت‌های اشتراک\n• بهبود چشمگیر عملکرد و روانی انیمیشن‌های برنامه",
+  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.4.0/gmbnet.apk",
   "release_date": "1403/12/19"
 }
