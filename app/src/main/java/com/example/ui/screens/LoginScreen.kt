@@ -97,19 +97,25 @@ fun LoginScreen(
         isVisible = true
     }
 
-    // Modern Cyber Palette
-    val deepNavyBg = Color(0xFF060A13)
-    val cardBg = Color(0xFF0C1324)
-    val inputBg = Color(0xFF111A2E)
-    val inputFocusBg = Color(0xFF142038)
-    val borderNormal = Color(0xFF1E2D4A)
-    val textMuted = Color(0xFF8DA2C0)
-    val textSecondary = Color(0xFFCBD5E1)
-    val placeholderColor = Color(0xFF5A6F90)
-    val brandCyan = Color(0xFF38BDF8)
-    val neonElectric = Color(0xFF00E5FF)
+    // Modern 2026 Cyber Obsidian & Electric Glass Design System (Matched with MainScreen)
+    val deepNavyBg = Color(0xFF060912)
+    val surfaceElevatedColor = Color(0xFF0E172A)
+    val borderStrokeColor = Color(0xFF1E293B)
+    val brandCyan = Color(0xFF00E5FF)
+    val electricSky = Color(0xFF38BDF8)
     val brandPurple = Color(0xFFA855F7)
     val neonGreen = Color(0xFF10B981)
+    val neonOrange = Color(0xFFF97316)
+    val neonRed = Color(0xFFEF4444)
+    val neonYellow = Color(0xFFFACC15)
+
+    val cardBg = Color(0xFF0C1324)
+    val inputBg = Color(0xFF0A1224)
+    val inputFocusBg = Color(0xFF0F1A30)
+    val borderNormal = Color(0xFF1E293B)
+    val textMuted = Color(0xFF8DA2C0)
+    val textSecondary = Color(0xFFCBD5E1)
+    val placeholderColor = Color(0xFF475569)
 
     // Infinite pulsing/rotation animations for the VPN Security Lock
     val infiniteTransition = rememberInfiniteTransition(label = "cyber_lock_anim")
@@ -130,7 +136,7 @@ fun LoginScreen(
         initialValue = 0.95f,
         targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = FastOutSlowInEasing),
+            animation = tween(2200, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseScale"
@@ -138,29 +144,29 @@ fun LoginScreen(
 
     // Pulsing aura alpha
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.85f,
+        initialValue = 0.30f,
+        targetValue = 0.75f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearOutSlowInEasing),
+            animation = tween(1800, easing = LinearOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glowAlpha"
     )
 
-    // Dynamic Gradients
+    // Dynamic Gradients matching MainScreen's high-tech aesthetic
     val buttonGradient = Brush.horizontalGradient(
         colors = listOf(
             Color(0xFF0284C7),
             Color(0xFF2563EB),
-            Color(0xFF6366F1),
-            Color(0xFFA855F7)
+            Color(0xFF4F46E5),
+            Color(0xFF7C3AED)
         )
     )
 
     val cardGradient = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF0E172C),
-            Color(0xFF090E1C)
+            Color(0xFF111C32),
+            Color(0xFF090F1C)
         )
     )
 
@@ -178,9 +184,12 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.radialGradient(
-                        colors = listOf(Color(0xFF101B34), deepNavyBg),
-                        radius = 1300f
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF0A1224),
+                            deepNavyBg,
+                            Color(0xFF04060C)
+                        )
                     )
                 )
                 .padding(innerPadding),
@@ -201,61 +210,80 @@ fun LoginScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    // Main Glassmorphic Container Card
+                    // Main Glassmorphic Container Card matching MainScreen style
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .widthIn(max = 440.dp)
-                            .border(1.dp, borderNormal, RoundedCornerShape(32.dp))
+                            .border(
+                                1.dp,
+                                Brush.linearGradient(
+                                    listOf(
+                                        Color(0x5038BDF8),
+                                        Color(0x1538BDF8),
+                                        Color(0x40A855F7)
+                                    )
+                                ),
+                                RoundedCornerShape(28.dp)
+                            )
                             .shadow(
                                 elevation = 24.dp,
-                                shape = RoundedCornerShape(32.dp),
-                                spotColor = brandCyan.copy(alpha = 0.25f),
+                                shape = RoundedCornerShape(28.dp),
+                                spotColor = brandCyan.copy(alpha = 0.35f),
                                 ambientColor = Color.Black
                             ),
                         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                        shape = RoundedCornerShape(32.dp)
+                        shape = RoundedCornerShape(28.dp)
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(cardGradient)
-                                .padding(horizontal = 24.dp, vertical = 26.dp)
+                                .padding(horizontal = 24.dp, vertical = 28.dp)
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                // Top Security Badge Chip
+                                // Top Security Badge Chip with Neon Beacon
                                 Row(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(100.dp))
-                                        .background(Color(0xFF14223E))
-                                        .border(1.dp, Color(0xFF243A62), RoundedCornerShape(100.dp))
-                                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                                        .background(Color(0xFF0F1A2F))
+                                        .border(
+                                            1.dp,
+                                            Brush.horizontalGradient(
+                                                listOf(
+                                                    Color(0x4038BDF8),
+                                                    Color(0x30A855F7)
+                                                )
+                                            ),
+                                            RoundedCornerShape(100.dp)
+                                        )
+                                        .padding(horizontal = 14.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(7.dp)
+                                            .size(8.dp)
                                             .clip(CircleShape)
                                             .background(neonGreen)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(7.dp))
                                     Text(
                                         text = "GMB NET",
-                                        color = Color(0xFF93C5FD),
+                                        color = Color.White,
                                         fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 1.2.sp
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Icon(
                                         imageVector = Icons.Default.VpnLock,
                                         contentDescription = null,
                                         tint = brandCyan,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
 
@@ -266,19 +294,19 @@ fun LoginScreen(
                                 // ==========================================
                                 Box(
                                     modifier = Modifier
-                                        .size(110.dp),
+                                        .size(116.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     // Outer Glowing Aura
                                     Box(
                                         modifier = Modifier
-                                            .size(105.dp)
+                                            .size(110.dp)
                                             .scale(pulseScale)
                                             .clip(CircleShape)
                                             .background(
                                                 Brush.radialGradient(
                                                     colors = listOf(
-                                                        brandCyan.copy(alpha = glowAlpha * 0.45f),
+                                                        brandCyan.copy(alpha = glowAlpha * 0.40f),
                                                         brandPurple.copy(alpha = glowAlpha * 0.15f),
                                                         Color.Transparent
                                                     )
@@ -289,7 +317,7 @@ fun LoginScreen(
                                     // Rotating Cyber Segment Orbit Ring
                                     Box(
                                         modifier = Modifier
-                                            .size(96.dp)
+                                            .size(102.dp)
                                             .rotate(ringRotation)
                                             .drawBehind {
                                                 val strokeWidth = 2.dp.toPx()
@@ -298,6 +326,8 @@ fun LoginScreen(
                                                         listOf(
                                                             Color.Transparent,
                                                             brandCyan,
+                                                            Color.Transparent,
+                                                            electricSky,
                                                             Color.Transparent,
                                                             brandPurple,
                                                             Color.Transparent
@@ -314,18 +344,18 @@ fun LoginScreen(
                                     // Second counter-rotating subtle dot ring
                                     Box(
                                         modifier = Modifier
-                                            .size(86.dp)
-                                            .rotate(-ringRotation * 1.5f)
+                                            .size(90.dp)
+                                            .rotate(-ringRotation * 1.4f)
                                             .drawBehind {
                                                 val r = size.minDimension / 2
                                                 val center = Offset(size.width / 2, size.height / 2)
                                                 drawCircle(
-                                                    color = neonElectric.copy(alpha = 0.8f),
+                                                    color = brandCyan.copy(alpha = 0.9f),
                                                     radius = 3.dp.toPx(),
                                                     center = Offset(center.x + r, center.y)
                                                 )
                                                 drawCircle(
-                                                    color = brandPurple.copy(alpha = 0.8f),
+                                                    color = brandPurple.copy(alpha = 0.9f),
                                                     radius = 2.5.dp.toPx(),
                                                     center = Offset(center.x - r, center.y)
                                                 )
@@ -335,19 +365,20 @@ fun LoginScreen(
                                     // Central Cyber Hexagon/Squircle Lock Badge
                                     Box(
                                         modifier = Modifier
-                                            .size(70.dp)
+                                            .size(72.dp)
                                             .shadow(
                                                 elevation = 16.dp,
-                                                shape = RoundedCornerShape(24.dp),
+                                                shape = RoundedCornerShape(22.dp),
                                                 spotColor = brandCyan,
                                                 ambientColor = brandPurple
                                             )
-                                            .clip(RoundedCornerShape(24.dp))
+                                            .clip(RoundedCornerShape(22.dp))
                                             .background(
-                                                Brush.linearGradient(
+                                                Brush.radialGradient(
                                                     listOf(
-                                                        Color(0xFF122448),
-                                                        Color(0xFF0A1224)
+                                                        Color(0xFF1E2E4A),
+                                                        Color(0xFF0F1A2E),
+                                                        Color(0xFF070C18)
                                                     )
                                                 )
                                             )
@@ -356,11 +387,11 @@ fun LoginScreen(
                                                 Brush.linearGradient(
                                                     listOf(
                                                         brandCyan,
-                                                        Color(0xFF6366F1),
+                                                        Color(0xFF38BDF8),
                                                         brandPurple
                                                     )
                                                 ),
-                                                RoundedCornerShape(24.dp)
+                                                RoundedCornerShape(22.dp)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -369,15 +400,15 @@ fun LoginScreen(
                                             contentDescription = "GMB NET Logo",
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .padding(6.dp)
-                                                .clip(RoundedCornerShape(18.dp))
+                                                .padding(7.dp)
+                                                .clip(RoundedCornerShape(16.dp))
                                         )
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(18.dp))
 
-                                // Title Changed to: "ورود به اپلیکیشن"
+                                // Title
                                 Text(
                                     text = "ورود به اپلیکیشن",
                                     color = Color.White,
@@ -397,7 +428,7 @@ fun LoginScreen(
                                     textAlign = TextAlign.Center
                                 )
 
-                                Spacer(modifier = Modifier.height(22.dp))
+                                Spacer(modifier = Modifier.height(24.dp))
 
                                 // ==========================================
                                 // USERNAME INPUT FIELD
@@ -472,7 +503,7 @@ fun LoginScreen(
                                             focusedTextColor = Color.White,
                                             unfocusedTextColor = textSecondary,
                                             focusedBorderColor = brandCyan,
-                                            unfocusedBorderColor = borderNormal,
+                                            unfocusedBorderColor = borderStrokeColor,
                                             cursorColor = brandCyan,
                                             focusedContainerColor = inputFocusBg,
                                             unfocusedContainerColor = inputBg
@@ -564,7 +595,7 @@ fun LoginScreen(
                                             focusedTextColor = Color.White,
                                             unfocusedTextColor = textSecondary,
                                             focusedBorderColor = brandCyan,
-                                            unfocusedBorderColor = borderNormal,
+                                            unfocusedBorderColor = borderStrokeColor,
                                             cursorColor = brandCyan,
                                             focusedContainerColor = inputFocusBg,
                                             unfocusedContainerColor = inputBg
@@ -598,8 +629,8 @@ fun LoginScreen(
                                         onCheckedChange = { rememberMe = it },
                                         colors = CheckboxDefaults.colors(
                                             checkedColor = brandCyan,
-                                            uncheckedColor = Color(0xFF334155),
-                                            checkmarkColor = Color(0xFF0A0F1E)
+                                            uncheckedColor = borderStrokeColor,
+                                            checkmarkColor = Color(0xFF060912)
                                         ),
                                         modifier = Modifier.size(22.dp)
                                     )
@@ -610,14 +641,14 @@ fun LoginScreen(
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
                                         text = localValidationMsg ?: "",
-                                        color = Color(0xFFF87171),
+                                        color = neonRed,
                                         fontSize = 12.sp,
                                         textAlign = TextAlign.Right,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(20.dp))
+                                Spacer(modifier = Modifier.height(22.dp))
 
                                 // ==========================================
                                 // MAIN LOGIN ACTION BUTTON
@@ -695,7 +726,7 @@ fun LoginScreen(
                                 ) {
                                     HorizontalDivider(
                                         modifier = Modifier.weight(1f),
-                                        color = Color(0xFF1E2D4A),
+                                        color = borderStrokeColor,
                                         thickness = 0.7.dp
                                     )
                                     Text(
@@ -706,7 +737,7 @@ fun LoginScreen(
                                     )
                                     HorizontalDivider(
                                         modifier = Modifier.weight(1f),
-                                        color = Color(0xFF1E2D4A),
+                                        color = borderStrokeColor,
                                         thickness = 0.7.dp
                                     )
                                 }
@@ -723,10 +754,10 @@ fun LoginScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
 
-                                // Buy Subscription Action Button
-                                Button(
+                                // Buy Subscription Action Button with Cyan Glass Style
+                                Surface(
                                     onClick = {
                                         try {
                                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://gmb-net.ir"))
@@ -735,28 +766,33 @@ fun LoginScreen(
                                             Toast.makeText(context, "خطا در باز کردن مرورگر", Toast.LENGTH_SHORT).show()
                                         }
                                     },
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color(0xFF0F2642),
+                                    border = BorderStroke(1.dp, Color(0xFF0284C7).copy(alpha = 0.6f)),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(48.dp)
-                                        .testTag("buy_subscription_login_button"),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF2563EB)
-                                    )
+                                        .testTag("buy_subscription_login_button")
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ShoppingBag,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "خرید اشتراک",
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ShoppingBag,
+                                            contentDescription = null,
+                                            tint = brandCyan,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "خرید اشتراک",
+                                            color = electricSky,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -774,7 +810,7 @@ fun LoginScreen(
                                 .fillMaxWidth()
                                 .widthIn(max = 440.dp)
                                 .padding(top = 16.dp)
-                                .border(1.dp, Color(0x60EF4444), RoundedCornerShape(18.dp)),
+                                .border(1.dp, neonRed.copy(alpha = 0.5f), RoundedCornerShape(18.dp)),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF25101A)),
                             shape = RoundedCornerShape(18.dp)
                         ) {
@@ -802,7 +838,7 @@ fun LoginScreen(
                                     Icon(
                                         imageVector = Icons.Default.ErrorOutline,
                                         contentDescription = "خطا در ورود",
-                                        tint = Color(0xFFEF4444),
+                                        tint = neonRed,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }

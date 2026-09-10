@@ -41,6 +41,7 @@ class Tun2SocksEngine(
     private val vpnInterface: ParcelFileDescriptor,
     private val sshSession: Session,
     private val localSocksPort: Int = 10808,
+    private val onTunnelDropped: (() -> Unit)? = null,
     private val onTraffic: (rx: Long, tx: Long) -> Unit
 ) {
 
@@ -769,6 +770,7 @@ class Tun2SocksEngine(
     private suspend fun connectSshChannel(session: TcpSession) = withContext(Dispatchers.IO) {
         try {
             if (!sshSession.isConnected) {
+                onTunnelDropped?.invoke()
                 throw IOException("SSH session disconnected")
             }
 

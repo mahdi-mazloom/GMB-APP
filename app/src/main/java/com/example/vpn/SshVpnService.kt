@@ -42,6 +42,7 @@ class SshVpnService : VpnService() {
     private var serviceJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var reconnectionManager: VpnReconnectionManager? = null
 
     // Tracks connection metrics
     private var statsJob: Job? = null
@@ -55,6 +56,10 @@ class SshVpnService : VpnService() {
         val rxBytes = MutableStateFlow(0L)
         val txBytes = MutableStateFlow(0L)
         val connectedDuration = MutableStateFlow(0L) // in seconds
+
+        val isNetworkAvailable = MutableStateFlow(true)
+        val reconnectAttempts = MutableStateFlow(0)
+        val lastReconnectReason = MutableStateFlow<String?>(null)
         
         var currentHost = "ssh.mahdis-net.ir"
         var currentPort = 2280
@@ -66,6 +71,34 @@ class SshVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        initReconnectionManager()
+    }
+
+    private fun initReconnectionManager() {
+        val manager = VpnReconnectionManager(
+            context = applicationContext,
+            vpnService = this,
+            scope = serviceScope,
+            onLog = { message, level ->
+                serviceScope.launch {
+                    logToDatabase(message, level)
+                }
+            },
+            onReconnectAction = { attempt, reason ->
+                executeTunnelConnection(isReconnect = true, attempt = attempt)
+            }
+        )
+
+        serviceScope.launch {
+            manager.isNetworkAvailable.collect { isNetworkAvailable.value = it }
+        }
+        serviceScope.launch {
+            manager.reconnectAttempts.collect { reconnectAttempts.value = it }
+        }
+        serviceScope.launch {
+            manager.lastReconnectReason.collect { lastReconnectReason.value = it }
+        }
+        reconnectionManager = manager
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -113,9 +146,27 @@ class SshVpnService : VpnService() {
             }
         }
 
-        serviceJob = serviceScope.launch {
-            logToDatabase("شروع فرآیند اتصال به سرور SSH...", "INFO")
+        reconnectionManager?.start()
 
+        serviceJob = serviceScope.launch {
+            val success = executeTunnelConnection(isReconnect = false, attempt = 1)
+            if (!success) {
+                // If initial attempt encounters a transient issue, let reconnection service retry automatically
+                reconnectionManager?.triggerReconnect("عدم موفقیت در برقراری اتصال اولیه")
+            }
+        }
+    }
+
+    private suspend fun executeTunnelConnection(isReconnect: Boolean, attempt: Int): Boolean {
+        if (isReconnect) {
+            connectionStatus.value = VpnStatus.RECONNECTING
+            updateNotification("در حال اتصال مجدد خودکار (تلاش $attempt)...", "GMB NET")
+            cleanupTunnelComponents()
+        } else {
+            logToDatabase("شروع فرآیند اتصال به سرور SSH...", "INFO")
+        }
+
+        return try {
             // Load credentials from active database session if available
             val db = AppDatabase.getDatabase(applicationContext)
             val session = db.userSessionDao().getActiveSessionOnce()
@@ -127,144 +178,150 @@ class SshVpnService : VpnService() {
             val udpgw = if (currentUdpgwPort > 0) currentUdpgwPort else (session?.udpgwPort ?: 7302)
 
             logToDatabase("سرور هدف: $host:$port | نام کاربری: $user", "INFO")
-            logToDatabase("درگاه UDPGW: $udpgw", "INFO")
+            if (udpgw > 0) {
+                logToDatabase("درگاه UDPGW: $udpgw", "INFO")
+            }
 
-            try {
-                // Initialize JSch
-                val jsch = JSch()
-                
-                // Protect socket to avoid looping back into VPN TUN interface
-                val socketFactory = object : SocketFactory {
-                    override fun createSocket(h: String, p: Int): Socket {
-                        val s = Socket()
-                        protect(s)
-                        s.tcpNoDelay = true
-                        s.keepAlive = true
-                        s.connect(InetSocketAddress(h, p), 20000)
-                        return s
-                    }
-
-                    override fun getInputStream(s: Socket): InputStream = s.getInputStream()
-                    override fun getOutputStream(s: Socket): OutputStream = s.getOutputStream()
+            // Initialize JSch
+            val jsch = JSch()
+            
+            // Protect socket to avoid looping back into VPN TUN interface
+            val socketFactory = object : SocketFactory {
+                override fun createSocket(h: String, p: Int): Socket {
+                    val s = Socket()
+                    protect(s)
+                    s.tcpNoDelay = true
+                    s.keepAlive = true
+                    s.connect(InetSocketAddress(h, p), 15000)
+                    return s
                 }
 
-                sshSession = jsch.getSession(user, host, port).apply {
-                    setPassword(pass)
-                    setSocketFactory(socketFactory)
+                override fun getInputStream(s: Socket): InputStream = s.getInputStream()
+                override fun getOutputStream(s: Socket): OutputStream = s.getOutputStream()
+            }
 
-                    val config = Properties().apply {
-                        put("StrictHostKeyChecking", "no")
-                        put("ServerAliveInterval", "25") // 25s reduces mobile radio power state transitions by 40%
-                        put("PreferredAuthentications", "password,keyboard-interactive")
-                    }
-                    setConfig(config)
+            val newSshSession = jsch.getSession(user, host, port).apply {
+                setPassword(pass)
+                setSocketFactory(socketFactory)
 
-                    userInfo = object : UserInfo, UIKeyboardInteractive {
-                        override fun getPassphrase(): String? = null
-                        override fun getPassword(): String = pass
-                        override fun promptPassword(message: String?): Boolean = true
-                        override fun promptPassphrase(message: String?): Boolean = true
-                        override fun promptYesNo(message: String?): Boolean = true
-                        override fun showMessage(message: String?) {}
-                        override fun promptKeyboardInteractive(
-                            destination: String?,
-                            name: String?,
-                            instruction: String?,
-                            prompt: Array<out String>?,
-                            echo: BooleanArray?
-                        ): Array<String> {
-                            return Array(prompt?.size ?: 1) { pass }
-                        }
-                    }
+                val config = Properties().apply {
+                    put("StrictHostKeyChecking", "no")
+                    put("ServerAliveInterval", "25") // 25s reduces mobile radio power state transitions by 40%
+                    put("PreferredAuthentications", "password,keyboard-interactive")
                 }
+                setConfig(config)
 
-                logToDatabase("در حال برقراری ارتباط امن SSH Handshake...", "INFO")
-                updateNotification("در حال تبادل کلید با سرور...")
-
-                // Connect with a 20-second timeout
-                sshSession?.connect(20000)
-
-                logToDatabase("رمزنگاری امن با موفقیت انجام شد. احراز هویت تایید گردید.", "SUCCESS")
-                
-                // Start local SOCKS5 proxy server routed through SSH session
-                val localSocksPort = 10808
-                socksServer?.stop()
-                val server = LocalSocksServer(sshSession!!, localSocksPort) { rx, tx ->
-                    if (rx > 0) rxBytes.value += rx
-                    if (tx > 0) txBytes.value += tx
-                }
-                server.start()
-                socksServer = server
-                logToDatabase("پروکسی محلی SOCKS5/HTTP روی پورت $localSocksPort فعال شد.", "SUCCESS")
-
-                // Set up UDPGW local forwarding
-                if (udpgw > 0) {
-                    try {
-                        sshSession?.setPortForwardingL(udpgw, "127.0.0.1", udpgw)
-                        logToDatabase("پورت فورواردینگ UDPGW روی پورت $udpgw تنظیم شد.", "SUCCESS")
-                    } catch (e: Exception) {
-                        Log.w("SshVpnService", "UDPGW forward warning: ${e.message}")
+                userInfo = object : UserInfo, UIKeyboardInteractive {
+                    override fun getPassphrase(): String? = null
+                    override fun getPassword(): String = pass
+                    override fun promptPassword(message: String?): Boolean = true
+                    override fun promptPassphrase(message: String?): Boolean = true
+                    override fun promptYesNo(message: String?): Boolean = true
+                    override fun showMessage(message: String?) {}
+                    override fun promptKeyboardInteractive(
+                        destination: String?,
+                        name: String?,
+                        instruction: String?,
+                        prompt: Array<out String>?,
+                        echo: BooleanArray?
+                    ): Array<String> {
+                        return Array(prompt?.size ?: 1) { pass }
                     }
                 }
+            }
 
-                // Establish the Vpn Interface
-                setupVpnInterface(localSocksPort, host)
+            logToDatabase("در حال برقراری ارتباط امن SSH Handshake...", "INFO")
+            updateNotification(if (isReconnect) "اتصال مجدد: تبادل کلید با سرور..." else "در حال تبادل کلید با سرور...")
 
-                if (vpnInterface != null) {
-                    logToDatabase("تونل GMB NET با موفقیت متصل شد!", "SUCCESS")
-                    connectionStatus.value = VpnStatus.CONNECTED
-                    updateNotification("Connected to GMB NET", "GMB NET")
+            // Connect with a 15-second timeout
+            newSshSession.connect(15000)
+            sshSession = newSshSession
 
-                    // Acquire partial wakeLock to prevent CPU sleep disconnects on MIUI / OneUI
-                    try {
-                        val pm = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            logToDatabase("رمزنگاری امن با موفقیت انجام شد. احراز هویت تایید گردید.", "SUCCESS")
+            
+            // Start local SOCKS5 proxy server routed through SSH session
+            val localSocksPort = 10808
+            socksServer?.stop()
+            val server = LocalSocksServer(newSshSession, localSocksPort) { rx, tx ->
+                if (rx > 0) rxBytes.value += rx
+                if (tx > 0) txBytes.value += tx
+            }
+            server.start()
+            socksServer = server
+            logToDatabase("پروکسی محلی SOCKS5/HTTP روی پورت $localSocksPort فعال شد.", "SUCCESS")
+
+            // Set up UDPGW local forwarding
+            if (udpgw > 0) {
+                try {
+                    newSshSession.setPortForwardingL(udpgw, "127.0.0.1", udpgw)
+                    logToDatabase("پورت فورواردینگ UDPGW روی پورت $udpgw تنظیم شد.", "SUCCESS")
+                } catch (e: Exception) {
+                    Log.w("SshVpnService", "UDPGW forward warning: ${e.message}")
+                }
+            }
+
+            // Establish the Vpn Interface
+            setupVpnInterface(localSocksPort, host)
+
+            if (vpnInterface != null) {
+                logToDatabase(if (isReconnect) "ارتباط مجدد تونل GMB NET با موفقیت برقرار شد!" else "تونل GMB NET با موفقیت متصل شد!", "SUCCESS")
+                connectionStatus.value = VpnStatus.CONNECTED
+                updateNotification("Connected to GMB NET", "GMB NET")
+
+                // Acquire partial wakeLock to prevent CPU sleep disconnects on MIUI / OneUI
+                try {
+                    val pm = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                    if (wakeLock == null || wakeLock?.isHeld != true) {
                         wakeLock = pm?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "GmbNet:VpnWakeLock")?.apply {
                             setReferenceCounted(false)
                             acquire(12 * 60 * 60 * 1000L) // 12 hours max timeout safety
                         }
-                    } catch (e: Exception) {
-                        Log.w("SshVpnService", "Could not acquire WakeLock: ${e.message}")
                     }
-
-                    startStatsMonitoring()
-                } else {
-                    throw IOException("امکان ایجاد رابط کاربری شبکه VPN مقدور نیست")
+                } catch (e: Exception) {
+                    Log.w("SshVpnService", "Could not acquire WakeLock: ${e.message}")
                 }
 
-            } catch (e: Exception) {
-                val errorMsg = e.localizedMessage ?: e.message ?: "خطای ناشناخته در اتصال"
-                Log.e("SshVpnService", "Error during SSH setup", e)
-                logToDatabase("خطا در برقراری ارتباط با سرور SSH: $errorMsg", "ERROR")
+                reconnectionManager?.onConnected()
+                startStatsMonitoring()
+                true
+            } else {
+                throw IOException("امکان ایجاد رابط کاربری شبکه VPN مقدور نیست")
+            }
+
+        } catch (e: Exception) {
+            val errorMsg = e.localizedMessage ?: e.message ?: "خطای ناشناخته در اتصال"
+            Log.e("SshVpnService", "Error during SSH setup (isReconnect=$isReconnect)", e)
+            logToDatabase("خطا در برقراری ارتباط با سرور SSH: $errorMsg", if (isReconnect) "WARN" else "ERROR")
+            if (!isReconnect) {
                 connectionStatus.value = VpnStatus.ERROR
                 updateNotification("اتصال ناموفق")
-                stopVpn()
             }
+            false
         }
     }
 
     private suspend fun setupVpnInterface(localSocksPort: Int, host: String) {
         try {
-            val builder = Builder()
-                .setSession("GMB NET - $host")
-                .setMtu(1500) // 1500 MTU guarantees full standard IP packet support for TLS/HTTPS
-                .addAddress("10.0.0.2", 24)
-                .addDnsServer("8.8.8.8")
-                .addDnsServer("1.1.1.1")
-                .addRoute("0.0.0.0", 0)
-                .addRoute("198.18.0.0", 15) // Explicit routing for Fake-IP benchmark block
+            if (vpnInterface == null) {
+                val builder = Builder()
+                    .setSession("GMB NET - $host")
+                    .setMtu(1500) // 1500 MTU guarantees full standard IP packet support for TLS/HTTPS
+                    .addAddress("10.0.0.2", 24)
+                    .addDnsServer("8.8.8.8")
+                    .addDnsServer("1.1.1.1")
+                    .addRoute("0.0.0.0", 0)
+                    .addRoute("198.18.0.0", 15) // Explicit routing for Fake-IP benchmark block
 
-            // Prevent routing loop by disallowing our app from entering the tunnel
-            try {
-                builder.addDisallowedApplication(packageName)
-            } catch (e: Exception) {
-                Log.w("SshVpnService", "Could not disallow app package: ${e.message}")
+                // Prevent routing loop by disallowing our app from entering the tunnel
+                try {
+                    builder.addDisallowedApplication(packageName)
+                } catch (e: Exception) {
+                    Log.w("SshVpnService", "Could not disallow app package: ${e.message}")
+                }
+
+                vpnInterface = builder.establish()
+                logToDatabase("رابط شبکه محلی VPN ایجاد شد (10.0.0.2).", "INFO")
             }
-
-            // Transparent TUN mode routes 100% of IP traffic (TCP, UDP, ICMP) 
-            // without restrictive HTTP proxy layers, guaranteeing Telegram, WhatsApp,
-            // Instagram, and games work seamlessly.
-            vpnInterface = builder.establish()
-            logToDatabase("رابط شبکه محلی VPN ایجاد شد (10.0.0.2).", "INFO")
             
             tunEngine?.stop()
             val pfd = vpnInterface
@@ -274,7 +331,10 @@ class SshVpnService : VpnService() {
                     vpnService = this,
                     vpnInterface = pfd,
                     sshSession = session,
-                    localSocksPort = localSocksPort
+                    localSocksPort = localSocksPort,
+                    onTunnelDropped = {
+                        reconnectionManager?.triggerReconnect("قطع اتصال در لایه ارسال پکت‌ها")
+                    }
                 ) { rx, tx ->
                     if (rx > 0) rxBytes.value += rx
                     if (tx > 0) txBytes.value += tx
@@ -293,7 +353,7 @@ class SshVpnService : VpnService() {
     private fun startStatsMonitoring() {
         statsJob?.cancel()
         statsJob = serviceScope.launch {
-            var seconds = 0L
+            var seconds = connectedDuration.value
             while (isActive && connectionStatus.value == VpnStatus.CONNECTED) {
                 delay(1000)
                 seconds++
@@ -302,18 +362,65 @@ class SshVpnService : VpnService() {
         }
     }
 
+    fun isTunnelHealthy(): Boolean {
+        val session = sshSession ?: return false
+        if (!session.isConnected) return false
+        return try {
+            session.sendKeepAliveMsg()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun onReconnectingNotification(attempt: Int) {
+        updateNotification("قطع ارتباط - در حال اتصال مجدد خودکار (تلاش $attempt)...", "GMB NET")
+    }
+
+    fun onNetworkLostNotification() {
+        updateNotification("اینترنت قطع شد - در انتظار اتصال به شبکه...", "GMB NET")
+    }
+
+    fun onWaitingForNetworkNotification() {
+        updateNotification("در انتظار برقراری اینترنت برای اتصال مجدد...", "GMB NET")
+    }
+
+    fun updateUnderlyingNetwork(network: android.net.Network?) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+            try {
+                setUnderlyingNetworks(if (network != null) arrayOf(network) else null)
+            } catch (e: Exception) {
+                Log.w("SshVpnService", "Could not set underlying networks: ${e.message}")
+            }
+        }
+    }
+
+    private fun cleanupTunnelComponents() {
+        try {
+            tunEngine?.stop()
+        } catch (e: Exception) {}
+        tunEngine = null
+
+        try {
+            socksServer?.stop()
+        } catch (e: Exception) {}
+        socksServer = null
+
+        try {
+            sshSession?.disconnect()
+        } catch (e: Exception) {}
+        sshSession = null
+    }
+
     private fun stopVpn() {
+        reconnectionManager?.stop()
+
         serviceScope.launch {
             logToDatabase("در حال قطع اتصال GMB NET...", "INFO")
         }
         connectionStatus.value = VpnStatus.DISCONNECTED
         
-        try {
-            tunEngine?.stop()
-        } catch (e: Exception) {
-            // ignore
-        }
-        tunEngine = null
+        cleanupTunnelComponents()
 
         statsJob?.cancel()
         statsJob = null
@@ -322,25 +429,11 @@ class SshVpnService : VpnService() {
         serviceJob = null
 
         try {
-            socksServer?.stop()
-        } catch (e: Exception) {
-            // ignore
-        }
-        socksServer = null
-
-        try {
             vpnInterface?.close()
         } catch (e: Exception) {
             // ignore
         }
         vpnInterface = null
-
-        try {
-            sshSession?.disconnect()
-        } catch (e: Exception) {
-            // ignore
-        }
-        sshSession = null
 
         // Release WakeLock safely
         try {

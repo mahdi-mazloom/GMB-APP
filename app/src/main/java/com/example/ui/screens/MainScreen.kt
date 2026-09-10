@@ -91,6 +91,9 @@ fun MainScreen(
     val rx by viewModel.rxBytes.collectAsState()
     val tx by viewModel.txBytes.collectAsState()
     val secondsElapsed by viewModel.duration.collectAsState()
+    val isNetworkAvailable by viewModel.isNetworkAvailable.collectAsState()
+    val reconnectAttempts by viewModel.reconnectAttempts.collectAsState()
+    val lastReconnectReason by viewModel.lastReconnectReason.collectAsState()
 
     // Dialog state for renewal, voucher redeem, and logout
     var showRenewDialog by remember { mutableStateOf(false) }
@@ -163,6 +166,7 @@ fun MainScreen(
         targetValue = when {
             isExpired -> neonRed
             status == VpnStatus.CONNECTING -> neonYellow
+            status == VpnStatus.RECONNECTING -> neonOrange
             status == VpnStatus.CONNECTED -> neonGreen
             status == VpnStatus.ERROR -> neonRed
             else -> brandCyan
@@ -196,7 +200,7 @@ fun MainScreen(
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = if (status == VpnStatus.CONNECTING) 2400 else 12000,
+                durationMillis = if (status == VpnStatus.CONNECTING || status == VpnStatus.RECONNECTING) 2200 else 12000,
                 easing = LinearEasing
             ),
             repeatMode = RepeatMode.Restart
@@ -463,6 +467,7 @@ fun MainScreen(
                     isExpired -> neonRed
                     status == VpnStatus.CONNECTED -> neonGreen
                     status == VpnStatus.CONNECTING -> neonYellow
+                    status == VpnStatus.RECONNECTING -> neonOrange
                     status == VpnStatus.ERROR -> neonRed
                     else -> electricSky
                 }
@@ -471,6 +476,15 @@ fun MainScreen(
                     isExpired -> "اشتراک منقضی شده است (اتصال مسدود)"
                     status == VpnStatus.CONNECTED -> "اتصال با رمزگذاری سرتاسری فعال است"
                     status == VpnStatus.CONNECTING -> "در حال برقراری ارتباط با سرور امن..."
+                    status == VpnStatus.RECONNECTING -> {
+                        if (!isNetworkAvailable) {
+                            "اینترنت قطع شد - در انتظار اتصال به شبکه..."
+                        } else if (reconnectAttempts > 0) {
+                            "در حال اتصال مجدد خودکار (تلاش $reconnectAttempts)..."
+                        } else {
+                            "در حال برقراری مجدد تونل ارتباطی..."
+                        }
+                    }
                     status == VpnStatus.ERROR -> "خطا در برقراری اتصال - لمس جهت تلاش مجدد"
                     else -> "آماده اتصال - برای شروع لمس کنید"
                 }
@@ -494,6 +508,7 @@ fun MainScreen(
                                     when {
                                         isExpired -> neonRed.copy(alpha = 0.16f)
                                         status == VpnStatus.CONNECTING -> neonYellow.copy(alpha = pulseAlpha * 0.28f)
+                                        status == VpnStatus.RECONNECTING -> neonOrange.copy(alpha = pulseAlpha * 0.32f)
                                         status == VpnStatus.CONNECTED -> neonGreen.copy(alpha = pulseAlpha * 0.24f)
                                         status == VpnStatus.ERROR -> neonRed.copy(alpha = 0.22f)
                                         else -> brandCyan.copy(alpha = 0.08f)
@@ -508,7 +523,7 @@ fun MainScreen(
                                 .clip(CircleShape)
                                 .background(Color(0xFF091122))
                                 .drawBehind {
-                                    if (status == VpnStatus.CONNECTED || status == VpnStatus.CONNECTING) {
+                                    if (status == VpnStatus.CONNECTED || status == VpnStatus.CONNECTING || status == VpnStatus.RECONNECTING) {
                                         // Draw futuristic rotating neon arc
                                         drawArc(
                                             brush = Brush.sweepGradient(
@@ -520,7 +535,7 @@ fun MainScreen(
                                                 )
                                             ),
                                             startAngle = orbitRotation,
-                                            sweepAngle = if (status == VpnStatus.CONNECTING) 240f else 320f,
+                                            sweepAngle = if (status == VpnStatus.CONNECTING || status == VpnStatus.RECONNECTING) 240f else 320f,
                                             useCenter = false,
                                             style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                                         )
@@ -536,7 +551,7 @@ fun MainScreen(
                                     if (isExpired) {
                                         showRenewDialog = true
                                     } else {
-                                        if (status == VpnStatus.CONNECTED) {
+                                        if (status == VpnStatus.CONNECTED || status == VpnStatus.RECONNECTING || status == VpnStatus.CONNECTING) {
                                             viewModel.toggleVpn(context)
                                         } else {
                                             val prep = VpnService.prepare(context)
@@ -567,6 +582,9 @@ fun MainScreen(
                                             status == VpnStatus.CONNECTING -> Brush.radialGradient(
                                                 listOf(neonYellow.copy(alpha = 0.85f), Color(0xFF78350F), Color(0xFF070B14))
                                             )
+                                            status == VpnStatus.RECONNECTING -> Brush.radialGradient(
+                                                listOf(neonOrange.copy(alpha = 0.90f), Color(0xFF7C2D12), Color(0xFF070B14))
+                                            )
                                             status == VpnStatus.ERROR -> Brush.radialGradient(
                                                 listOf(neonRed.copy(alpha = 0.85f), Color(0xFF7F1D1D), Color(0xFF070B14))
                                             )
@@ -596,6 +614,7 @@ fun MainScreen(
                                             isExpired -> Icons.Default.Lock
                                             status == VpnStatus.CONNECTED -> Icons.Default.Shield
                                             status == VpnStatus.CONNECTING -> Icons.Default.Sync
+                                            status == VpnStatus.RECONNECTING -> Icons.Default.Autorenew
                                             status == VpnStatus.ERROR -> Icons.Default.ErrorOutline
                                             else -> Icons.Default.PowerSettingsNew
                                         },
@@ -609,6 +628,7 @@ fun MainScreen(
                                             isExpired -> "LOCKED"
                                             status == VpnStatus.CONNECTED -> "CONNECTED"
                                             status == VpnStatus.CONNECTING -> "CONNECTING"
+                                            status == VpnStatus.RECONNECTING -> "RETRYING"
                                             status == VpnStatus.ERROR -> "ERROR"
                                             else -> "START"
                                         },
@@ -650,6 +670,39 @@ fun MainScreen(
                                     .clip(CircleShape)
                                     .background(buttonColor)
                             )
+                        }
+                    }
+
+                    // Auto-Reconnect Status Indicator (displayed during automatic reconnection)
+                    AnimatedVisibility(
+                        visible = status == VpnStatus.RECONNECTING,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xCC7C2D12),
+                            border = BorderStroke(1.dp, neonOrange.copy(alpha = 0.6f)),
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "اتصال مجدد خودکار",
+                                    tint = neonOrange,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = if (!isNetworkAvailable) "سیستم آماده‌باش: منتظر برقراری اینترنت" else "بازیابی هوشمند فعال است (تلاش $reconnectAttempts)",
+                                    color = Color(0xFFFFEDD5),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
 

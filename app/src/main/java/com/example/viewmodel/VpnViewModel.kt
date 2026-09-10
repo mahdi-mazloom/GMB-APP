@@ -44,6 +44,9 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
     val rxBytes = SshVpnService.rxBytes
     val txBytes = SshVpnService.txBytes
     val duration = SshVpnService.connectedDuration
+    val isNetworkAvailable = SshVpnService.isNetworkAvailable
+    val reconnectAttempts = SshVpnService.reconnectAttempts
+    val lastReconnectReason = SshVpnService.lastReconnectReason
 
     private val _apiBaseUrl = MutableStateFlow(ShahanPanelClient.DEFAULT_BASE_URL)
     val apiBaseUrl: StateFlow<String> = _apiBaseUrl.asStateFlow()

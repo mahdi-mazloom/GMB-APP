@@ -1,8 +1,8 @@
 {
-  "latest_version_code": 6,
-  "latest_version_name": "1.4.0",
+  "latest_version_code": 7,
+  "latest_version_name": "1.5.0",
   "is_force_update": false,
-  "changelog": "• بازطراحی چشم‌گیر و مدرن رابط کاربری با تم Cyber Obsidian و افکت شیشه‌ای\n• اضافه شدن حلقه چرخان نئونی و هاله تنفسی داینامیک اتصال\n• پنل وضعیت زنده اتصال و کرنومتر مونو‌اسپیس هوشمند\n• نوسازی کامل تلمتری مصرف دیتای دانلود و آپلود و کارت‌های اشتراک\n• بهبود چشمگیر عملکرد و روانی انیمیشن‌های برنامه",
-  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.4.0/gmbnet.apk",
-  "release_date": "1403/12/19"
+  "changelog": "• هماهنگ‌سازی و بازطراحی کامل صفحه ورود با تم مدرن Cyber Obsidian و شیشه‌ای\n• بهینه‌سازی انیمیشن‌های نئونی، هاله تنفسی و عملکرد کلی اتصال\n• ارتقا و بهبود روانی رابط کاربری و رفع ایرادات گزارش‌شده",
+  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.5.0/gmbnet.apk",
+  "release_date": "1403/12/20"
 }
