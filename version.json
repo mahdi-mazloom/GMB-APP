@@ -1,8 +1,8 @@
 {
-  "latest_version_code": 7,
-  "latest_version_name": "1.5.0",
+  "latest_version_code": 8,
+  "latest_version_name": "1.6.0",
   "is_force_update": false,
-  "changelog": "• هماهنگ‌سازی و بازطراحی کامل صفحه ورود با تم مدرن Cyber Obsidian و شیشه‌ای\n• بهینه‌سازی انیمیشن‌های نئونی، هاله تنفسی و عملکرد کلی اتصال\n• ارتقا و بهبود روانی رابط کاربری و رفع ایرادات گزارش‌شده",
-  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.5.0/gmbnet.apk",
-  "release_date": "1403/12/20"
+  "changelog": "• افزودن و مسیردهی هوشمند پروتکل پرسرعت VLESS WebSocket اختصاصی برای اپراتورهای ایرانسل و رایتل\n• اتصال فوق‌العاده پایدار و دور زدن محدودیت‌های شدید اینترنت\n• هماهنگ‌سازی و دریافت دقیق تاریخ انقضای اشتراک از پنل شاهان\n• ارتقا و بهینه‌سازی سرعت تونل و پایداری اتصال",
+  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.6.0/gmbnet.apk",
+  "release_date": "1403/12/23"
 }
