@@ -1,8 +1,7 @@
 package com.example.vpn
 
 import android.util.Log
-import com.jcraft.jsch.ChannelDirectTCPIP
-import com.jcraft.jsch.Session
+import kotlinx.coroutines.runBlocking
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -15,10 +14,10 @@ import java.util.concurrent.Executors
 
 /**
  * Universal local proxy server supporting both SOCKS5 and HTTP CONNECT proxying,
- * routed securely through JSch direct-tcpip SSH channels.
+ * routed securely through unified TunnelTransport (SSH Direct-TCPIP or VMess AEAD).
  */
 class LocalSocksServer(
-    private val session: Session,
+    private val transport: TunnelTransport,
     val port: Int = 10808,
     private val onTraffic: ((rx: Long, tx: Long) -> Unit)? = null
 ) {
@@ -37,7 +36,7 @@ class LocalSocksServer(
         if (isRunning) return
         isRunning = true
         serverSocket = ServerSocket(port, 100, InetAddress.getByName("0.0.0.0"))
-        
+
         executor.execute {
             while (isRunning && serverSocket?.isClosed == false) {
                 try {
@@ -56,7 +55,7 @@ class LocalSocksServer(
     }
 
     private fun handleClient(clientSocket: Socket) {
-        var sshChannel: ChannelDirectTCPIP? = null
+        var tunnelStream: TunnelStream? = null
         try {
             val rawInput = clientSocket.getInputStream()
             val rawOutput = clientSocket.getOutputStream()
@@ -78,7 +77,7 @@ class LocalSocksServer(
         } catch (e: Exception) {
             // Socket or network error
         } finally {
-            try { sshChannel?.disconnect() } catch (_: Exception) {}
+            try { tunnelStream?.close() } catch (_: Exception) {}
             try { clientSocket.close() } catch (_: Exception) {}
         }
     }
@@ -108,64 +107,64 @@ class LocalSocksServer(
         // 2. SOCKS5 Request
         val reqVer = dis.readUnsignedByte()
         val cmd = dis.readUnsignedByte()
-        dis.readByte() // RSV reserved
+        val rsv = dis.readUnsignedByte()
         val atyp = dis.readUnsignedByte()
 
-        if (reqVer != 5 || cmd != 1) {
-            // Command not supported
-            output.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
+        if (cmd != 1) {
+            // CMD 1 = CONNECT. (Others: 2=BIND, 3=UDP ASSOCIATE not supported directly over TCP SOCKS)
+            output.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0)) // Command not supported
             output.flush()
             clientSocket.close()
             return
         }
 
-        val targetHost: String = when (atyp) {
-            0x01 -> {
+        val targetHost: String
+        val targetPort: Int
+
+        when (atyp) {
+            1 -> {
                 // IPv4: 4 bytes
                 val ipBytes = ByteArray(4)
                 dis.readFully(ipBytes)
-                InetAddress.getByAddress(ipBytes).hostAddress ?: "127.0.0.1"
+                targetHost = InetAddress.getByAddress(ipBytes).hostAddress ?: "0.0.0.0"
+                targetPort = dis.readUnsignedShort()
             }
-            0x03 -> {
-                // Domain: 1 byte length followed by domain name
-                val len = dis.readUnsignedByte()
-                val domainBytes = ByteArray(len)
+            3 -> {
+                // Domain name: 1 byte len + ASCII domain
+                val domainLen = dis.readUnsignedByte()
+                val domainBytes = ByteArray(domainLen)
                 dis.readFully(domainBytes)
-                String(domainBytes, Charsets.UTF_8)
+                targetHost = String(domainBytes, Charsets.US_ASCII)
+                targetPort = dis.readUnsignedShort()
             }
-            0x04 -> {
+            4 -> {
                 // IPv6: 16 bytes
-                val ip6Bytes = ByteArray(16)
-                dis.readFully(ip6Bytes)
-                InetAddress.getByAddress(ip6Bytes).hostAddress ?: "::1"
+                val ipBytes = ByteArray(16)
+                dis.readFully(ipBytes)
+                targetHost = InetAddress.getByAddress(ipBytes).hostAddress ?: "::"
+                targetPort = dis.readUnsignedShort()
             }
             else -> {
+                output.write(byteArrayOf(0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0)) // Address type not supported
+                output.flush()
                 clientSocket.close()
                 return
             }
         }
 
-        val targetPort = dis.readUnsignedShort()
-
-        // 3. Connect via SSH direct-tcpip channel
-        if (!session.isConnected) {
+        // 3. Connect via TunnelTransport
+        if (!transport.isConnected) {
             output.write(byteArrayOf(0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
             output.flush()
             clientSocket.close()
             return
         }
 
-        val channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
-        channel.setHost(targetHost)
-        channel.setPort(targetPort)
-        channel.setOrgIPAddress("127.0.0.1")
-        channel.setOrgPort(clientSocket.port)
-
-        val channelIn = channel.inputStream
-        val channelOut = channel.outputStream
-
+        val stream: TunnelStream
         try {
-            channel.connect(15000)
+            stream = runBlocking {
+                transport.openTcpStream(targetHost, targetPort, 15000)
+            }
         } catch (e: Exception) {
             try {
                 // SOCKS5 0x05 = Connection refused / Host unreachable
@@ -182,7 +181,7 @@ class LocalSocksServer(
         output.flush()
 
         // 5. Transfer data
-        pipeBidirectional(input, output, channelIn, channelOut, channel, clientSocket)
+        pipeBidirectional(input, output, stream.input, stream.output, stream, clientSocket)
     }
 
     private fun handleHttpProxy(
@@ -197,43 +196,37 @@ class LocalSocksServer(
         if (parts.size < 2) return
 
         val method = parts[0].uppercase()
-        val uri = parts[1]
+        val target = parts[1]
 
         val targetHost: String
         val targetPort: Int
 
         if (method == "CONNECT") {
-            // HTTPS CONNECT tunnel
-            val hostPort = uri.split(":")
+            // HTTPS Tunnel: target is "host:port"
+            val hostPort = target.split(":")
             targetHost = hostPort[0]
             targetPort = if (hostPort.size > 1) hostPort[1].toIntOrNull() ?: 443 else 443
 
-            // Read the rest of the HTTP headers until empty line
-            var headerLine: String?
-            while (reader.readLine().also { headerLine = it } != null) {
-                if (headerLine.isNullOrBlank()) break
+            // Read remaining headers until blank line
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                if (line.isNullOrBlank()) break
             }
 
-            if (!session.isConnected) {
+            if (!transport.isConnected) {
                 output.write("HTTP/1.1 502 Bad Gateway\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
                 output.flush()
                 return
             }
 
-            val channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
-            channel.setHost(targetHost)
-            channel.setPort(targetPort)
-            channel.setOrgIPAddress("127.0.0.1")
-            channel.setOrgPort(clientSocket.port)
-
-            val channelIn = channel.inputStream
-            val channelOut = channel.outputStream
-
+            val stream: TunnelStream
             try {
-                channel.connect(15000)
+                stream = runBlocking {
+                    transport.openTcpStream(targetHost, targetPort, 15000)
+                }
             } catch (e: Exception) {
                 try {
-                    output.write("HTTP/1.1 502 Bad Gateway\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
+                    output.write("HTTP/1.1 504 Gateway Timeout\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
                     output.flush()
                 } catch (_: Exception) {}
                 clientSocket.close()
@@ -244,10 +237,9 @@ class LocalSocksServer(
             output.write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
             output.flush()
 
-            pipeBidirectional(input, output, channelIn, channelOut, channel, clientSocket)
+            pipeBidirectional(input, output, stream.input, stream.output, stream, clientSocket)
         } else {
             // Standard HTTP request: extract host and port from URL or Host header
-            // Read headers to find Host
             var hostHeader = ""
             val allHeaders = mutableListOf(firstLine)
             var headerLine: String?
@@ -263,23 +255,17 @@ class LocalSocksServer(
             targetHost = hostPort[0]
             targetPort = if (hostPort.size > 1) hostPort[1].toIntOrNull() ?: 80 else 80
 
-            if (targetHost.isBlank() || !session.isConnected) {
+            if (targetHost.isBlank() || !transport.isConnected) {
                 output.write("HTTP/1.1 502 Bad Gateway\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
                 output.flush()
                 return
             }
 
-            val channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
-            channel.setHost(targetHost)
-            channel.setPort(targetPort)
-            channel.setOrgIPAddress("127.0.0.1")
-            channel.setOrgPort(clientSocket.port)
-
-            val channelIn = channel.inputStream
-            val channelOut = channel.outputStream
-
+            val stream: TunnelStream
             try {
-                channel.connect(15000)
+                stream = runBlocking {
+                    transport.openTcpStream(targetHost, targetPort, 15000)
+                }
             } catch (e: Exception) {
                 try {
                     output.write("HTTP/1.1 502 Bad Gateway\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
@@ -290,13 +276,14 @@ class LocalSocksServer(
             }
 
             // Forward the original HTTP request headers
+            val streamOut = stream.output
             for (header in allHeaders) {
-                channelOut.write((header + "\r\n").toByteArray(Charsets.ISO_8859_1))
+                streamOut.write((header + "\r\n").toByteArray(Charsets.ISO_8859_1))
             }
-            channelOut.write("\r\n".toByteArray(Charsets.ISO_8859_1))
-            channelOut.flush()
+            streamOut.write("\r\n".toByteArray(Charsets.ISO_8859_1))
+            streamOut.flush()
 
-            pipeBidirectional(input, output, channelIn, channelOut, channel, clientSocket)
+            pipeBidirectional(input, output, stream.input, stream.output, stream, clientSocket)
         }
     }
 
@@ -305,7 +292,7 @@ class LocalSocksServer(
         clientOut: OutputStream,
         channelIn: InputStream,
         channelOut: OutputStream,
-        channel: ChannelDirectTCPIP,
+        stream: AutoCloseable,
         clientSocket: Socket
     ) {
         val latch = java.util.concurrent.CountDownLatch(2)
@@ -328,7 +315,7 @@ class LocalSocksServer(
                 if (accumulatedTx > 0) onTraffic?.invoke(0L, accumulatedTx)
             } catch (_: Exception) {
             } finally {
-                try { channel.disconnect() } catch (_: Exception) {}
+                try { stream.close() } catch (_: Exception) {}
                 latch.countDown()
             }
         }
@@ -372,4 +359,3 @@ class LocalSocksServer(
         } catch (_: Exception) {}
     }
 }
-

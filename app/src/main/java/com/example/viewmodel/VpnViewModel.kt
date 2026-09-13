@@ -64,6 +64,34 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
     private val _updateNotification = MutableStateFlow<String?>(null)
     val updateNotification: StateFlow<String?> = _updateNotification.asStateFlow()
 
+    // App Theme Mode State
+    val appThemeMode: StateFlow<com.example.ui.theme.AppThemeMode> = com.example.util.ThemePreferences.themeMode
+
+    fun setAppThemeMode(mode: com.example.ui.theme.AppThemeMode) {
+        com.example.util.ThemePreferences.setThemeMode(mode)
+    }
+
+    // App Language State
+    val appLanguage: StateFlow<com.example.util.AppLanguage> = com.example.util.LanguagePreferences.currentLanguage
+
+    fun setAppLanguage(language: com.example.util.AppLanguage) {
+        com.example.util.LanguagePreferences.setLanguage(language)
+    }
+
+    // Speed Test Manager and State
+    private val speedTestManager = com.example.util.SpeedTestManager()
+    val speedTestState: StateFlow<com.example.util.SpeedTestResult> = speedTestManager.testState
+
+    fun startSpeedTest() {
+        viewModelScope.launch {
+            speedTestManager.runTest()
+        }
+    }
+
+    fun cancelSpeedTest() {
+        speedTestManager.cancelTest()
+    }
+
     init {
         // Load stored Url on launch if any, or seed default active session
         viewModelScope.launch(Dispatchers.IO) {
@@ -247,7 +275,7 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
                 SshVpnService.currentUser = userSession.sshUsername
                 SshVpnService.currentPass = userSession.sshPassword
                 SshVpnService.currentUdpgwPort = userSession.udpgwPort
-                database.vpnLogDao().insertLog(VpnLog(message = "احراز هویت موفق: ${userSession.username} | سرور: ${userSession.sshHost}:${userSession.sshPort}", level = "SUCCESS"))
+                database.vpnLogDao().insertLog(VpnLog(message = "احراز هویت موفق: ${userSession.username} | سرویس امن اختصاصی GMB NET", level = "SUCCESS"))
 
                 _loginState.value = LoginState.Success
             } catch (netEx: Exception) {
@@ -274,18 +302,55 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
+    private suspend fun isSessionExpired(session: UserSession?): Boolean {
+        if (session == null) return true
+        if (session.username.isNotBlank()) {
+            try {
+                val service = ShahanPanelClient.create(_apiBaseUrl.value)
+                val userResponse = service.getUserInfo(
+                    token = ShahanPanelClient.API_TOKEN,
+                    method = "userinfo",
+                    username = session.username
+                )
+                val userData = userResponse.data
+                if (userData != null) {
+                    val packageDays = when (val d = userData.days) {
+                        is Number -> d.toInt()
+                        is String -> d.toIntOrNull()
+                        else -> null
+                    }
+                    val remainingDays = PersianDateHelper.calculateRemainingDays(
+                        finishDateStr = userData.finishdate,
+                        fallbackDays = packageDays ?: 30
+                    )
+                    val totalTrafficMb = userData.traffic?.toLongOrNull() ?: 0L
+                    val updated = session.copy(
+                        remainingDays = remainingDays,
+                        finishDate = userData.finishdate ?: "",
+                        shamsiFinishDate = PersianDateHelper.formatToShamsiDate(userData.finishdate, remainingDays),
+                        totalTrafficMb = totalTrafficMb,
+                        status = userData.enable ?: "active"
+                    )
+                    database.userSessionDao().saveSession(updated)
+                    return userData.enable == "disabled" || userData.enable == "expired" || remainingDays <= 0
+                }
+            } catch (e: Exception) {
+                // fallback to local calculation
+            }
+        }
+        val daysLeft = if (!session.finishDate.isNullOrBlank()) {
+            PersianDateHelper.calculateRemainingDays(session.finishDate)
+        } else {
+            session.remainingDays
+        }
+        return session.status == "expired" || daysLeft <= 0
+    }
+
     fun startVpnService(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             val session = database.userSessionDao().getActiveSessionOnce()
-            val daysLeft = if (!session?.finishDate.isNullOrBlank()) {
-                PersianDateHelper.calculateRemainingDays(session.finishDate)
-            } else {
-                session?.remainingDays ?: 0
-            }
-            val isExpired = session?.status == "expired" || daysLeft <= 0
-
-            if (isExpired) {
-                logError("امکان اتصال وجود ندارد: اشتراک کاربر به پایان رسیده است.")
+            if (isSessionExpired(session)) {
+                logError("امکان اتصال وجود ندارد: اشتراک کاربر در پنل شاهان به پایان رسیده است.")
                 SshVpnService.connectionStatus.value = VpnStatus.DISCONNECTED
                 stopVpnService(context)
                 return@launch
@@ -326,15 +391,8 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
     fun startVpnWithPermissionGranted(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             val session = database.userSessionDao().getActiveSessionOnce()
-            val daysLeft = if (!session?.finishDate.isNullOrBlank()) {
-                PersianDateHelper.calculateRemainingDays(session.finishDate)
-            } else {
-                session?.remainingDays ?: 0
-            }
-            val isExpired = session?.status == "expired" || daysLeft <= 0
-
-            if (isExpired) {
-                logError("امکان اتصال وجود ندارد: اشتراک کاربر به پایان رسیده است.")
+            if (isSessionExpired(session)) {
+                logError("امکان اتصال وجود ندارد: اشتراک کاربر در پنل شاهان به پایان رسیده است.")
                 SshVpnService.connectionStatus.value = VpnStatus.DISCONNECTED
                 stopVpnService(context)
                 return@launch
@@ -445,7 +503,8 @@ class VpnViewModel(private val database: AppDatabase) : ViewModel() {
 
     fun logError(message: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            database.vpnLogDao().insertLog(VpnLog(message = message, level = "ERROR"))
+            val sanitized = com.example.util.LogSanitizer.sanitize(message)
+            database.vpnLogDao().insertLog(VpnLog(message = sanitized, level = "ERROR"))
         }
     }
 

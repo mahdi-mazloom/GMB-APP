@@ -33,17 +33,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.util.LocalAppStrings
 import com.example.util.PersianDateHelper
 import com.example.viewmodel.RedeemLicenseUiState
 import com.example.viewmodel.VpnViewModel
 import java.util.Locale
-
-private val brandCyan = Color(0xFF00E5FF)
-private val neonGreen = Color(0xFF10B981)
-private val neonRed = Color(0xFFEF4444)
-private val deepDarkBg = Color(0xFF070B14)
-private val cardBg = Color(0xFF0E1626)
-private val borderSubtle = Color(0xFF1E293B)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,9 +45,22 @@ fun PurchaseScreen(
     viewModel: VpnViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+
+    val isDark = com.example.ui.theme.AppTheme.colors.isDark
+    val appColors = com.example.ui.theme.AppTheme.colors
+    val deepDarkBg = appColors.background
+    val cardBg = appColors.surfaceCard
+    val borderSubtle = appColors.cardBorder
+    val brandCyan = appColors.brandCyan
+    val neonGreen = appColors.neonGreen
+    val neonRed = appColors.neonRed
+    val textPrimary = appColors.textPrimary
+    val textSecondary = appColors.textSecondary
+    val textMuted = appColors.textMuted
 
     val activeSession by viewModel.activeSession.collectAsStateWithLifecycle()
     val isExpired = activeSession == null || (activeSession?.remainingDays ?: 0) <= 0
@@ -69,13 +76,13 @@ fun PurchaseScreen(
                 title = {
                     Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = "تمدید و خرید با کد لایسنس",
+                            text = strings.purchaseTitle,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = textPrimary
                         )
                         Text(
-                            text = "فعال‌سازی آنی اعتبار و حجم با ووچر",
+                            text = strings.purchaseSubtitle,
                             fontSize = 11.sp,
                             color = brandCyan
                         )
@@ -87,12 +94,12 @@ fun PurchaseScreen(
                         modifier = Modifier
                             .padding(start = 8.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF162032))
+                            .background(if (isDark) Color(0xFF162032) else Color(0xFFE2E8F0))
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "بازگشت",
-                            tint = Color.White
+                            contentDescription = strings.back,
+                            tint = textPrimary
                         )
                     }
                 },
@@ -145,7 +152,7 @@ fun PurchaseScreen(
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Text(
-                                text = if (isExpired) "اشتراک منقضی شده" else "اشتراک فعال",
+                                text = if (isExpired) strings.expired else strings.activeSubscription,
                                 color = if (isExpired) neonRed else neonGreen,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -158,8 +165,8 @@ fun PurchaseScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = activeSession?.username ?: "کاربر میهمان",
-                                color = Color.White,
+                                text = activeSession?.username ?: strings.guestUser,
+                                color = textPrimary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
@@ -180,21 +187,21 @@ fun PurchaseScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(horizontalAlignment = Alignment.Start) {
-                            Text("اعتبار باقیمانده", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                            Text(strings.remainingCreditLabel, color = textMuted, fontSize = 11.sp)
                             Text(
-                                text = if (isExpired) "۰ روز" else "${activeSession?.remainingDays ?: 0} روز",
-                                color = if (isExpired) neonRed else Color.White,
+                                text = if (isExpired) strings.zeroDays else strings.daysUnit(activeSession?.remainingDays ?: 0),
+                                color = if (isExpired) neonRed else textPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("حجم باقیمانده", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                            Text(strings.remainingTrafficLabel, color = textMuted, fontSize = 11.sp)
                             val totalMb = activeSession?.totalTrafficMb ?: 0L
                             val consumedMb = activeSession?.consumedTrafficMb ?: 0L
                             val remainingMb = maxOf(0L, totalMb - consumedMb)
-                            val remainingGB = if (totalMb <= 0L) "نامحدود" else "${remainingMb / 1024L} GB"
+                            val remainingGB = if (totalMb <= 0L) strings.unlimitedLabel else "${remainingMb / 1024L} GB"
                             Text(
                                 text = remainingGB,
                                 color = brandCyan,
@@ -204,12 +211,12 @@ fun PurchaseScreen(
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("تاریخ انقضا", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                            Text(strings.expiryDateLabel, color = textMuted, fontSize = 11.sp)
                             val rawDate = activeSession?.finishDate?.takeIf { it.isNotBlank() } ?: activeSession?.shamsiFinishDate
                             val expDate = PersianDateHelper.formatToShamsiDate(rawDate, activeSession?.remainingDays)
                             Text(
                                 text = expDate,
-                                color = Color.White,
+                                color = textPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -230,7 +237,7 @@ fun PurchaseScreen(
                         RoundedCornerShape(20.dp)
                     )
                     .testTag("buy_voucher_website_card"),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0B192E)),
+                colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF0B192E) else Color(0xFFF0F9FF)),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Column(
@@ -246,12 +253,12 @@ fun PurchaseScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            color = Color(0xFF3B82F6).copy(alpha = 0.2f),
+                            color = if (isDark) Color(0xFF3B82F6).copy(alpha = 0.2f) else Color(0xFFDBEAFE),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = "وب‌سایت رسمی",
-                                color = Color(0xFF60A5FA),
+                                text = strings.officialWebsiteCard,
+                                color = if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -263,23 +270,23 @@ fun PurchaseScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "خرید کد ووچر و لایسنس",
-                                color = Color.White,
+                                text = strings.buyVoucherTitle,
+                                color = textPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Icon(
                                 imageVector = Icons.Default.Language,
                                 contentDescription = null,
-                                tint = Color(0xFF60A5FA),
+                                tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
                                 modifier = Modifier.size(22.dp)
                             )
                         }
                     }
 
                     Text(
-                        text = "برای خرید کد لایسنس یا ووچر تمدید، لطفاً به سایت رسمی ما مراجعه فرمایید. پس از خرید فوری از سایت، کد در اختیار شما قرار می‌گیرد و می‌توانید در کادر زیر ثبت کنید.",
-                        color = Color(0xFFCBD5E1),
+                        text = strings.buyVoucherDesc,
+                        color = textSecondary,
                         fontSize = 12.sp,
                         lineHeight = 20.sp,
                         textAlign = TextAlign.Right,
@@ -293,7 +300,7 @@ fun PurchaseScreen(
                                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://gmb-net.ir"))
                                 context.startActivity(intent)
                             } catch (e: Exception) {
-                                Toast.makeText(context, "خطا در باز کردن مرورگر: https://gmb-net.ir", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, strings.browserErrorWithUrl("https://gmb-net.ir"), Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier
@@ -313,7 +320,7 @@ fun PurchaseScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "ورود به سایت gmb-net.ir و خرید کد ووچر",
+                            text = strings.goToSiteAndBuy,
                             color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
@@ -325,10 +332,10 @@ fun PurchaseScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF081220))
+                            .background(if (isDark) Color(0xFF081220) else Color(0xFFE0F2FE))
                             .clickable {
                                 clipboardManager.setText(AnnotatedString("https://gmb-net.ir"))
-                                Toast.makeText(context, "آدرس سایت gmb-net.ir کپی شد", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, strings.websiteCopiedToast, Toast.LENGTH_SHORT).show()
                             }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -341,12 +348,12 @@ fun PurchaseScreen(
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
                                 contentDescription = null,
-                                tint = Color(0xFF60A5FA),
+                                tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = "کپی آدرس سایت",
-                                color = Color(0xFF60A5FA),
+                                text = strings.copyWebsiteUrl,
+                                color = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -354,7 +361,7 @@ fun PurchaseScreen(
 
                         Text(
                             text = "gmb-net.ir",
-                            color = Color(0xFF93C5FD),
+                            color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
@@ -395,7 +402,7 @@ fun PurchaseScreen(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = "تمدید و شارژ آنی",
+                                text = strings.instantRechargeCard,
                                 color = neonGreen,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -408,8 +415,8 @@ fun PurchaseScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "ثبت کد لایسنس و فعال‌سازی",
-                                color = Color.White,
+                                text = strings.submitLicenseCard,
+                                color = textPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -423,8 +430,8 @@ fun PurchaseScreen(
                     }
 
                     Text(
-                        text = "کد ووچر یا لایسنس خریداری‌شده را در کادر زیر وارد یا جای‌گذاری کنید تا اشتراک شما فورا تمدید شود:",
-                        color = Color(0xFFCBD5E1),
+                        text = strings.enterVoucherInBox,
+                        color = textSecondary,
                         fontSize = 12.sp,
                         lineHeight = 19.sp,
                         textAlign = TextAlign.Right,
@@ -447,14 +454,14 @@ fun PurchaseScreen(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = textPrimary,
                             textAlign = TextAlign.Center,
                             letterSpacing = 2.sp
                         ),
                         placeholder = {
                             Text(
-                                text = "کد لایسنس (مثال: GMB-VOUCHER-XXXX)",
-                                color = Color(0xFF64748B),
+                                text = strings.licenseInputPlaceholder,
+                                color = textMuted,
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
                                 textAlign = TextAlign.Center,
@@ -467,8 +474,8 @@ fun PurchaseScreen(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = neonGreen,
                             unfocusedBorderColor = borderSubtle,
-                            focusedContainerColor = Color(0xFF070C16),
-                            unfocusedContainerColor = Color(0xFF070C16)
+                            focusedContainerColor = if (isDark) Color(0xFF070C16) else Color(0xFFF8FAFC),
+                            unfocusedContainerColor = if (isDark) Color(0xFF070C16) else Color(0xFFF8FAFC)
                         ),
                         leadingIcon = {
                             Icon(
@@ -487,8 +494,8 @@ fun PurchaseScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Clear,
-                                            contentDescription = "پاک کردن",
-                                            tint = Color(0xFF94A3B8),
+                                            contentDescription = strings.clearField,
+                                            tint = textMuted,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -509,7 +516,7 @@ fun PurchaseScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ContentPaste,
-                                        contentDescription = "جای‌گذاری از کلیپ‌بورد",
+                                        contentDescription = strings.pasteFromClipboard,
                                         tint = brandCyan,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -529,7 +536,7 @@ fun PurchaseScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color(0xFF1E293B), RoundedCornerShape(10.dp))
+                                        .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9), RoundedCornerShape(10.dp))
                                         .padding(12.dp),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
@@ -541,8 +548,8 @@ fun PurchaseScreen(
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        text = "در حال ارتباط با سرور و تایید لایسنس...",
-                                        color = Color(0xFFCBD5E1),
+                                        text = strings.communicatingWithServer,
+                                        color = textSecondary,
                                         fontSize = 12.sp
                                     )
                                 }
@@ -551,7 +558,7 @@ fun PurchaseScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color(0xFF064E3B).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                        .background(if (isDark) Color(0xFF064E3B).copy(alpha = 0.5f) else Color(0xFFECFDF5), RoundedCornerShape(12.dp))
                                         .border(1.dp, neonGreen, RoundedCornerShape(12.dp))
                                         .padding(14.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
@@ -562,7 +569,7 @@ fun PurchaseScreen(
                                     ) {
                                         Text(
                                             text = state.message,
-                                            color = Color(0xFFA7F3D0),
+                                            color = if (isDark) Color(0xFFA7F3D0) else Color(0xFF065F46),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center
@@ -578,8 +585,8 @@ fun PurchaseScreen(
                                     if (state.daysAdded != null && state.daysAdded > 0) {
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = "+${state.daysAdded} روز به اشتراک شما اضافه شد",
-                                            color = Color.White,
+                                            text = strings.addedDaysToSubscription(state.daysAdded),
+                                            color = if (isDark) Color.White else Color(0xFF065F46),
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium
                                         )
@@ -587,8 +594,8 @@ fun PurchaseScreen(
                                     if (state.volumeGBAdded != null && state.volumeGBAdded > 0) {
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = "+${state.volumeGBAdded} گیگابایت ترافیک به حسابتان اضافه شد",
-                                            color = Color.White,
+                                            text = strings.addedVolumeToAccount(state.volumeGBAdded),
+                                            color = if (isDark) Color.White else Color(0xFF065F46),
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium
                                         )
@@ -599,7 +606,7 @@ fun PurchaseScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color(0xFF450A0A).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                        .background(if (isDark) Color(0xFF450A0A).copy(alpha = 0.5f) else Color(0xFFFEF2F2), RoundedCornerShape(12.dp))
                                         .border(1.dp, neonRed.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
                                         .padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -613,7 +620,7 @@ fun PurchaseScreen(
                                     )
                                     Text(
                                         text = state.errorMessage,
-                                        color = Color(0xFFFCA5A5),
+                                        color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626),
                                         fontSize = 12.sp,
                                         textAlign = TextAlign.Right,
                                         modifier = Modifier.weight(1f)
@@ -648,7 +655,7 @@ fun PurchaseScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "در حال بررسی و اعمال...",
+                                text = strings.checkingAndApplying,
                                 color = Color.White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
@@ -662,7 +669,7 @@ fun PurchaseScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "تایید و تمدید اشتراک",
+                                text = strings.confirmAndRenewSubscription,
                                 color = Color.White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
@@ -677,7 +684,7 @@ fun PurchaseScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(1.dp, borderSubtle, RoundedCornerShape(16.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF090E1A)),
+                colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF090E1A) else Color(0xFFF8FAFC)),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(
@@ -687,8 +694,8 @@ fun PurchaseScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "مراحل خرید و تمدید:",
-                        color = Color.White,
+                        text = strings.purchaseStepsTitle,
+                        color = textPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Right,
@@ -696,19 +703,31 @@ fun PurchaseScreen(
                     )
 
                     InstructionStepItem(
-                        step = "۱",
-                        title = "ورود به وب‌سایت gmb-net.ir",
-                        desc = "از طریق دکمه بالا وارد سایت شده و پلن مورد نظر خود را انتخاب و خریداری نمایید."
+                        step = strings.step1Number,
+                        title = strings.step1Title,
+                        desc = strings.step1Desc,
+                        textPrimary = textPrimary,
+                        textMuted = textMuted,
+                        isDark = isDark,
+                        brandCyan = brandCyan
                     )
                     InstructionStepItem(
-                        step = "۲",
-                        title = "دریافت کد لایسنس / ووچر",
-                        desc = "پس از پرداخت، کد اختصاصی به صورت فوری در سایت و ایمیل در اختیارتان قرار می‌گیرد."
+                        step = strings.step2Number,
+                        title = strings.step2Title,
+                        desc = strings.step2Desc,
+                        textPrimary = textPrimary,
+                        textMuted = textMuted,
+                        isDark = isDark,
+                        brandCyan = brandCyan
                     )
                     InstructionStepItem(
-                        step = "۳",
-                        title = "ثبت کد در برنامه",
-                        desc = "کد را در کادر بالا درج کرده و دکمه «تایید و تمدید اشتراک» را لمس کنید تا بلافاصله حسابتان فعال شود."
+                        step = strings.step3Number,
+                        title = strings.step3Title,
+                        desc = strings.step3Desc,
+                        textPrimary = textPrimary,
+                        textMuted = textMuted,
+                        isDark = isDark,
+                        brandCyan = brandCyan
                     )
                 }
             }
@@ -722,7 +741,11 @@ fun PurchaseScreen(
 private fun InstructionStepItem(
     step: String,
     title: String,
-    desc: String
+    desc: String,
+    textPrimary: Color,
+    textMuted: Color,
+    isDark: Boolean,
+    brandCyan: Color
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -735,14 +758,14 @@ private fun InstructionStepItem(
         ) {
             Text(
                 text = title,
-                color = Color(0xFFE2E8F0),
+                color = textPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Right
             )
             Text(
                 text = desc,
-                color = Color(0xFF94A3B8),
+                color = textMuted,
                 fontSize = 11.sp,
                 lineHeight = 17.sp,
                 textAlign = TextAlign.Right
@@ -753,7 +776,7 @@ private fun InstructionStepItem(
             modifier = Modifier
                 .size(24.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF1E293B)),
+                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
             contentAlignment = Alignment.Center
         ) {
             Text(

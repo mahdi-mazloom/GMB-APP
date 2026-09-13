@@ -1,0 +1,191 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="512dp"
+    android:height="512dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Group: Complete Floating Cyber Shield & Dynamic G Monogram -->
+    <group android:name="gmb_emblem">
+
+        <!-- Outer Cyber Shield Frame - Left Wing -->
+        <path
+            android:pathData="M 256,48 L 380,104 C 386,107 390,113 390,120 L 390,240 C 390,326 332,404 262,458 C 258,461 254,461 250,458 C 180,404 122,326 122,240 L 122,120 C 122,113 126,107 132,104 Z"
+            android:strokeWidth="10"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:startX="122"
+                    android:startY="48"
+                    android:endX="390"
+                    android:endY="460"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#00F5FF" />
+                    <item android:offset="0.3" android:color="#0EA5E9" />
+                    <item android:offset="0.7" android:color="#6366F1" />
+                    <item android:offset="1.0" android:color="#A855F7" />
+                </gradient>
+            </aapt:attr>
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="256"
+                    android:startY="48"
+                    android:endX="256"
+                    android:endY="460"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#2600F5FF" />
+                    <item android:offset="0.5" android:color="#1A0284C7" />
+                    <item android:offset="1.0" android:color="#334F46E5" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Cyber Wing Corner Brackets (Top Left & Top Right) -->
+        <path
+            android:pathData="M 96,160 L 96,112 C 96,96 108,84 124,78 L 190,52"
+            android:strokeWidth="6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:startX="96"
+                    android:startY="52"
+                    android:endX="190"
+                    android:endY="160"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#00F5FF" />
+                    <item android:offset="1.0" android:color="#38BDF8" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <path
+            android:pathData="M 416,160 L 416,112 C 416,96 404,84 388,78 L 322,52"
+            android:strokeWidth="6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:startX="416"
+                    android:startY="52"
+                    android:endX="322"
+                    android:endY="160"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#A855F7" />
+                    <item android:offset="1.0" android:color="#818CF8" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Inner Segmented Shield Lining -->
+        <path
+            android:pathData="M 256,86 L 354,130 C 358,132 360,136 360,140 L 360,236 C 360,302 316,364 256,412 C 196,364 152,302 152,236 L 152,140 C 152,136 154,132 158,130 Z"
+            android:strokeWidth="3.5"
+            android:strokeLineCap="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:startX="152"
+                    android:startY="86"
+                    android:endX="360"
+                    android:endY="412"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#8000F5FF" />
+                    <item android:offset="0.5" android:color="#4D38BDF8" />
+                    <item android:offset="1.0" android:color="#80818CF8" />
+                </gradient>
+            </aapt:attr>
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="256"
+                    android:startY="86"
+                    android:endX="256"
+                    android:endY="412"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#33061A36" />
+                    <item android:offset="1.0" android:color="#4D0B122B" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Dynamic High-Velocity 'G' Monogram (Outer Ring) -->
+        <path
+            android:pathData="M 314,198 C 298,172 268,162 238,166 C 196,172 168,212 172,258 C 176,304 214,338 260,338 C 294,338 322,318 334,288 L 260,288 C 252,288 246,282 246,274 C 246,266 252,260 260,260 L 350,260 C 358,260 364,266 364,274 C 364,332 316,370 256,370 C 192,370 140,320 138,254 C 136,186 186,134 252,134 C 288,134 324,148 348,176 C 354,183 353,193 346,198 C 338,204 320,204 314,198 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="138"
+                    android:startY="134"
+                    android:endX="364"
+                    android:endY="370"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#00F5FF" />
+                    <item android:offset="0.3" android:color="#38BDF8" />
+                    <item android:offset="0.65" android:color="#6366F1" />
+                    <item android:offset="1.0" android:color="#C084FC" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Sharp Supersonic Lightning Bolt / Fiber Tunnel Beam Piercing the Center -->
+        <path
+            android:pathData="M 284,136 L 206,252 C 203,256 206,262 212,262 L 254,262 L 228,358 C 226,366 236,370 240,364 L 322,246 C 326,240 322,234 316,234 L 274,234 L 298,142 C 300,134 290,130 284,136 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="206"
+                    android:startY="130"
+                    android:endX="322"
+                    android:endY="370"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#FFFFFF" />
+                    <item android:offset="0.2" android:color="#E0F2FE" />
+                    <item android:offset="0.5" android:color="#00F5FF" />
+                    <item android:offset="0.8" android:color="#38BDF8" />
+                    <item android:offset="1.0" android:color="#818CF8" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Inner Core Highlight Spark (Gleam) -->
+        <path
+            android:pathData="M 264,234 L 250,262 L 280,262 Z"
+            android:fillColor="#FFFFFF" />
+
+        <!-- Lower Tech Apex Notch -->
+        <path
+            android:pathData="M 240,432 L 256,448 L 272,432"
+            android:strokeWidth="4"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:strokeColor="#00F5FF" />
+
+        <!-- Cyber Dots / Connection Nodes -->
+        <!-- Top Node -->
+        <path
+            android:pathData="M 256,48 m -6,0 a 6,6 0 1,1 12,0 a 6,6 0 1,1 -12,0"
+            android:fillColor="#00F5FF" />
+
+        <!-- Left Node -->
+        <path
+            android:pathData="M 96,160 m -5,0 a 5,5 0 1,1 10,0 a 5,5 0 1,1 -10,0"
+            android:fillColor="#38BDF8" />
+
+        <!-- Right Node -->
+        <path
+            android:pathData="M 416,160 m -5,0 a 5,5 0 1,1 10,0 a 5,5 0 1,1 -10,0"
+            android:fillColor="#C084FC" />
+
+        <!-- Speed Stream Trails / Sub-arcs -->
+        <path
+            android:pathData="M 174,180 C 188,162 208,150 230,144"
+            android:strokeWidth="3.5"
+            android:strokeLineCap="round"
+            android:strokeColor="#8000F5FF" />
+
+        <path
+            android:pathData="M 338,320 C 318,342 292,354 264,358"
+            android:strokeWidth="3.5"
+            android:strokeLineCap="round"
+            android:strokeColor="#80A855F7" />
+
+    </group>
+</vector>

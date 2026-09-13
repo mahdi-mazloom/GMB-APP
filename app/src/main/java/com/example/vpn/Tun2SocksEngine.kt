@@ -39,7 +39,7 @@ import kotlin.random.Random
 class Tun2SocksEngine(
     private val vpnService: VpnService,
     private val vpnInterface: ParcelFileDescriptor,
-    private val sshSession: Session,
+    private val transport: TunnelTransport,
     private val localSocksPort: Int = 10808,
     private val onTunnelDropped: (() -> Unit)? = null,
     private val onTraffic: (rx: Long, tx: Long) -> Unit
@@ -123,6 +123,7 @@ class Tun2SocksEngine(
         val destHost: String = destIp,
         val clientSeq: AtomicLong,
         val serverSeq: AtomicLong,
+        var tunnelStream: TunnelStream? = null,
         var channel: ChannelDirectTCPIP? = null,
         var channelInput: InputStream? = null,
         var channelOutput: OutputStream? = null,
@@ -294,10 +295,10 @@ class Tun2SocksEngine(
                 }
             }
 
-            // Fallback for non-A records or parse failures: try SSH TCP or direct UDP
+            // Fallback for non-A records or parse failures: try TunnelTransport TCP or direct UDP
             var answerBytes: ByteArray? = null
-            if (sshSession.isConnected) {
-                answerBytes = resolveDnsViaSshTcp(dnsQueryBytes, "8.8.8.8")
+            if (transport.isConnected) {
+                answerBytes = resolveDnsViaTransport(dnsQueryBytes, "8.8.8.8")
             }
             if (answerBytes != null && answerBytes.isNotEmpty()) {
                 sendUdpPacket(dnsServerIp, dnsServerPort, clientIp, clientPort, answerBytes)
@@ -409,18 +410,13 @@ class Tun2SocksEngine(
         return resp
     }
 
-    private suspend fun resolveDnsViaSshTcp(query: ByteArray, dnsHost: String): ByteArray? = withContext(Dispatchers.IO) {
-        var channel: ChannelDirectTCPIP? = null
+    private suspend fun resolveDnsViaTransport(query: ByteArray, dnsHost: String): ByteArray? = withContext(Dispatchers.IO) {
+        var stream: TunnelStream? = null
         try {
-            if (!sshSession.isConnected) return@withContext null
-            channel = sshSession.openChannel("direct-tcpip") as ChannelDirectTCPIP
-            channel.setHost(dnsHost)
-            channel.setPort(53)
-            channel.setOrgIPAddress("127.0.0.1")
-            channel.setOrgPort(5353)
-            val out = channel.outputStream
-            val din = java.io.DataInputStream(channel.inputStream)
-            channel.connect(5000)
+            if (!transport.isConnected) return@withContext null
+            stream = transport.openTcpStream(dnsHost, 53, 5000)
+            val out = stream.output
+            val din = java.io.DataInputStream(stream.input)
 
             // RFC 7766: DNS over TCP has 2-byte prefix length
             out.write((query.size shr 8) and 0xFF)
@@ -434,10 +430,10 @@ class Tun2SocksEngine(
             din.readFully(resp)
             resp
         } catch (e: Exception) {
-            Log.d("Tun2SocksEngine", "SSH DNS to $dnsHost failed: ${e.message}")
+            Log.d("Tun2SocksEngine", "DNS to $dnsHost failed: ${e.message}")
             null
         } finally {
-            try { channel?.disconnect() } catch (_: Exception) {}
+            try { stream?.close() } catch (_: Exception) {}
         }
     }
 
@@ -769,25 +765,15 @@ class Tun2SocksEngine(
 
     private suspend fun connectSshChannel(session: TcpSession) = withContext(Dispatchers.IO) {
         try {
-            if (!sshSession.isConnected) {
+            if (!transport.isConnected) {
                 onTunnelDropped?.invoke()
-                throw IOException("SSH session disconnected")
+                throw IOException("Tunnel transport disconnected")
             }
 
-            val channel = sshSession.openChannel("direct-tcpip") as ChannelDirectTCPIP
-            channel.setHost(session.destHost)
-            channel.setPort(session.destPort)
-            channel.setOrgIPAddress("127.0.0.1")
-            channel.setOrgPort(session.clientPort)
-
-            val channelIn = channel.inputStream
-            val channelOut = channel.outputStream
-
-            channel.connect(10000)
-
-            session.channel = channel
-            session.channelInput = channelIn
-            session.channelOutput = channelOut
+            val stream = transport.openTcpStream(session.destHost, session.destPort, 10000)
+            session.tunnelStream = stream
+            session.channelInput = stream.input
+            session.channelOutput = stream.output
             session.state = SessionState.CONNECTED
             session.connectedDeferred.complete(true)
 
@@ -796,7 +782,7 @@ class Tun2SocksEngine(
                 readFromSshChannel(session)
             }
         } catch (e: Exception) {
-            Log.d("Tun2SocksEngine", "SSH direct-tcpip to ${session.destIp}:${session.destPort} failed: ${e.message}")
+            Log.d("Tun2SocksEngine", "Transport stream to ${session.destIp}:${session.destPort} failed: ${e.message}")
             session.connectedDeferred.complete(false)
             // Send RST to client
             engineScope.launch {

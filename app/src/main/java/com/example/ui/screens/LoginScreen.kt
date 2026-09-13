@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.database.AppDatabase
 import com.example.data.database.UserSession
+import com.example.util.LocalAppStrings
 import com.example.util.PersianDateHelper
 import com.example.viewmodel.LoginState
 import com.example.viewmodel.VpnViewModel
@@ -97,25 +98,28 @@ fun LoginScreen(
         isVisible = true
     }
 
-    // Modern 2026 Cyber Obsidian & Electric Glass Design System (Matched with MainScreen)
-    val deepNavyBg = Color(0xFF060912)
-    val surfaceElevatedColor = Color(0xFF0E172A)
-    val borderStrokeColor = Color(0xFF1E293B)
-    val brandCyan = Color(0xFF00E5FF)
-    val electricSky = Color(0xFF38BDF8)
-    val brandPurple = Color(0xFFA855F7)
-    val neonGreen = Color(0xFF10B981)
-    val neonOrange = Color(0xFFF97316)
-    val neonRed = Color(0xFFEF4444)
-    val neonYellow = Color(0xFFFACC15)
+    // Modern Theme-Aware Design System
+    val strings = LocalAppStrings.current
+    val isDark = com.example.ui.theme.AppTheme.colors.isDark
+    val appColors = com.example.ui.theme.AppTheme.colors
+    val deepNavyBg = appColors.background
+    val surfaceElevatedColor = appColors.surfaceElevated
+    val borderStrokeColor = appColors.cardBorder
+    val brandCyan = appColors.brandCyan
+    val electricSky = appColors.electricSky
+    val brandPurple = appColors.brandPurple
+    val neonGreen = appColors.neonGreen
+    val neonOrange = appColors.neonOrange
+    val neonRed = appColors.neonRed
+    val neonYellow = appColors.neonYellow
 
-    val cardBg = Color(0xFF0C1324)
-    val inputBg = Color(0xFF0A1224)
-    val inputFocusBg = Color(0xFF0F1A30)
-    val borderNormal = Color(0xFF1E293B)
-    val textMuted = Color(0xFF8DA2C0)
-    val textSecondary = Color(0xFFCBD5E1)
-    val placeholderColor = Color(0xFF475569)
+    val cardBg = appColors.surfaceCard
+    val inputBg = if (isDark) Color(0xFF0A1224) else Color(0xFFF1F5F9)
+    val inputFocusBg = if (isDark) Color(0xFF0F1A30) else Color(0xFFE2E8F0)
+    val borderNormal = appColors.cardBorder
+    val textMuted = appColors.textMuted
+    val textSecondary = appColors.textSecondary
+    val placeholderColor = if (isDark) Color(0xFF475569) else Color(0xFF94A3B8)
 
     // Infinite pulsing/rotation animations for the VPN Security Lock
     val infiniteTransition = rememberInfiniteTransition(label = "cyber_lock_anim")
@@ -163,12 +167,21 @@ fun LoginScreen(
         )
     )
 
-    val cardGradient = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF111C32),
-            Color(0xFF090F1C)
+    val cardGradient = if (isDark) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF111C32),
+                Color(0xFF090F1C)
+            )
         )
-    )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color.White,
+                Color(0xFFF8FAFC)
+            )
+        )
+    }
 
     // Automatically navigate to Main if user login was successful
     LaunchedEffect(loginState) {
@@ -185,11 +198,19 @@ fun LoginScreen(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(
-                            Color(0xFF0A1224),
-                            deepNavyBg,
-                            Color(0xFF04060C)
-                        )
+                        if (isDark) {
+                            listOf(
+                                Color(0xFF0A1224),
+                                deepNavyBg,
+                                Color(0xFF04060C)
+                            )
+                        } else {
+                            listOf(
+                                Color(0xFFF1F5F9),
+                                deepNavyBg,
+                                Color(0xFFE2E8F0)
+                            )
+                        }
                     )
                 )
                 .padding(innerPadding),
@@ -217,20 +238,30 @@ fun LoginScreen(
                             .widthIn(max = 440.dp)
                             .border(
                                 1.dp,
-                                Brush.linearGradient(
-                                    listOf(
-                                        Color(0x5038BDF8),
-                                        Color(0x1538BDF8),
-                                        Color(0x40A855F7)
+                                if (isDark) {
+                                    Brush.linearGradient(
+                                        listOf(
+                                            Color(0x5038BDF8),
+                                            Color(0x1538BDF8),
+                                            Color(0x40A855F7)
+                                        )
                                     )
-                                ),
+                                } else {
+                                    Brush.linearGradient(
+                                        listOf(
+                                            Color(0xFFBAE6FD),
+                                            Color(0xFFE2E8F0),
+                                            Color(0xFFE9D5FF)
+                                        )
+                                    )
+                                },
                                 RoundedCornerShape(28.dp)
                             )
                             .shadow(
                                 elevation = 24.dp,
                                 shape = RoundedCornerShape(28.dp),
-                                spotColor = brandCyan.copy(alpha = 0.35f),
-                                ambientColor = Color.Black
+                                spotColor = brandCyan.copy(alpha = if (isDark) 0.35f else 0.15f),
+                                ambientColor = if (isDark) Color.Black else Color(0x10000000)
                             ),
                         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                         shape = RoundedCornerShape(28.dp)
@@ -249,14 +280,21 @@ fun LoginScreen(
                                 Row(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(100.dp))
-                                        .background(Color(0xFF0F1A2F))
+                                        .background(if (isDark) Color(0xFF0F1A2F) else Color(0xFFE2E8F0))
                                         .border(
                                             1.dp,
                                             Brush.horizontalGradient(
-                                                listOf(
-                                                    Color(0x4038BDF8),
-                                                    Color(0x30A855F7)
-                                                )
+                                                if (isDark) {
+                                                    listOf(
+                                                        Color(0x4038BDF8),
+                                                        Color(0x30A855F7)
+                                                    )
+                                                } else {
+                                                    listOf(
+                                                        Color(0xFFBAE6FD),
+                                                        Color(0xFFDDD6FE)
+                                                    )
+                                                }
                                             ),
                                             RoundedCornerShape(100.dp)
                                         )
@@ -273,7 +311,7 @@ fun LoginScreen(
                                     Spacer(modifier = Modifier.width(7.dp))
                                     Text(
                                         text = "GMB NET",
-                                        color = Color.White,
+                                        color = if (isDark) Color.White else Color(0xFF0F172A),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         letterSpacing = 1.2.sp
@@ -362,46 +400,31 @@ fun LoginScreen(
                                             }
                                     )
 
-                                    // Central Cyber Hexagon/Squircle Lock Badge
+                                    // Modern Floating Cyber Logo (Zero background, pure futuristic transparency)
                                     Box(
-                                        modifier = Modifier
-                                            .size(72.dp)
-                                            .shadow(
-                                                elevation = 16.dp,
-                                                shape = RoundedCornerShape(22.dp),
-                                                spotColor = brandCyan,
-                                                ambientColor = brandPurple
-                                            )
-                                            .clip(RoundedCornerShape(22.dp))
-                                            .background(
-                                                Brush.radialGradient(
-                                                    listOf(
-                                                        Color(0xFF1E2E4A),
-                                                        Color(0xFF0F1A2E),
-                                                        Color(0xFF070C18)
-                                                    )
-                                                )
-                                            )
-                                            .border(
-                                                1.5.dp,
-                                                Brush.linearGradient(
-                                                    listOf(
-                                                        brandCyan,
-                                                        Color(0xFF38BDF8),
-                                                        brandPurple
-                                                    )
-                                                ),
-                                                RoundedCornerShape(22.dp)
-                                            ),
+                                        modifier = Modifier.size(82.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Image(
-                                            painter = painterResource(id = R.drawable.gmb_logo),
-                                            contentDescription = "GMB NET Logo",
+                                        // Ambient Soft Glow behind the logo
+                                        Box(
                                             modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(7.dp)
-                                                .clip(RoundedCornerShape(16.dp))
+                                                .size(56.dp)
+                                                .background(
+                                                Brush.radialGradient(
+                                                    listOf(
+                                                        brandCyan.copy(alpha = 0.28f),
+                                                        brandPurple.copy(alpha = 0.16f),
+                                                        Color.Transparent
+                                                    )
+                                                ),
+                                                CircleShape
+                                            )
+                                        )
+
+                                        Image(
+                                            painter = painterResource(id = R.drawable.ic_gmb_logo),
+                                            contentDescription = "GMB NET Logo",
+                                            modifier = Modifier.fillMaxSize()
                                         )
                                     }
                                 }
@@ -410,8 +433,8 @@ fun LoginScreen(
 
                                 // Title
                                 Text(
-                                    text = "ورود به اپلیکیشن",
-                                    color = Color.White,
+                                    text = strings.loginTitle,
+                                    color = if (isDark) Color.White else Color(0xFF0F172A),
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     textAlign = TextAlign.Center,
@@ -422,8 +445,8 @@ fun LoginScreen(
 
                                 // Subtitle
                                 Text(
-                                    text = "جهت اتصال ایمن، مشخصات اشتراک خود را وارد نمایید",
-                                    color = textMuted,
+                                    text = strings.loginSubtitle,
+                                    color = if (isDark) textMuted else Color(0xFF64748B),
                                     fontSize = 12.sp,
                                     textAlign = TextAlign.Center
                                 )
@@ -447,7 +470,7 @@ fun LoginScreen(
                                     ) {
                                         if (username.isNotBlank()) {
                                             Text(
-                                                text = "پاک کردن",
+                                                text = strings.clearField,
                                                 color = brandCyan,
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Medium,
@@ -459,8 +482,8 @@ fun LoginScreen(
                                             Spacer(modifier = Modifier.width(1.dp))
                                         }
                                         Text(
-                                            text = "نام کاربری",
-                                            color = if (isUsernameFocused) brandCyan else textSecondary,
+                                            text = strings.loginUsernameLabel,
+                                            color = if (isUsernameFocused) brandCyan else (if (isDark) textSecondary else Color(0xFF334155)),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             modifier = Modifier.padding(bottom = 6.dp)
@@ -475,7 +498,7 @@ fun LoginScreen(
                                         },
                                         placeholder = {
                                             Text(
-                                                text = "نام کاربری اشتراک...",
+                                                text = strings.loginUsernamePlaceholder,
                                                 color = placeholderColor,
                                                 fontSize = 13.sp,
                                                 textAlign = TextAlign.Right,
@@ -485,7 +508,7 @@ fun LoginScreen(
                                         trailingIcon = {
                                             Icon(
                                                 imageVector = Icons.Outlined.Person,
-                                                contentDescription = "آیکون نام کاربری",
+                                                contentDescription = strings.loginUsernameLabel,
                                                 tint = if (isUsernameFocused) brandCyan else placeholderColor,
                                                 modifier = Modifier.size(20.dp)
                                             )
@@ -500,10 +523,10 @@ fun LoginScreen(
                                             .fillMaxWidth()
                                             .testTag("username_input"),
                                         colors = OutlinedTextFieldDefaults.colors(
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = textSecondary,
+                                            focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                                            unfocusedTextColor = if (isDark) textSecondary else Color(0xFF334155),
                                             focusedBorderColor = brandCyan,
-                                            unfocusedBorderColor = borderStrokeColor,
+                                            unfocusedBorderColor = if (isDark) borderStrokeColor else Color(0xFFCBD5E1),
                                             cursorColor = brandCyan,
                                             focusedContainerColor = inputFocusBg,
                                             unfocusedContainerColor = inputBg
@@ -530,8 +553,8 @@ fun LoginScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "کلمه عبور",
-                                            color = if (isPasswordFocused) brandCyan else textSecondary,
+                                            text = strings.loginPasswordLabel,
+                                            color = if (isPasswordFocused) brandCyan else (if (isDark) textSecondary else Color(0xFF334155)),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             modifier = Modifier.padding(bottom = 6.dp)
@@ -546,7 +569,7 @@ fun LoginScreen(
                                         },
                                         placeholder = {
                                             Text(
-                                                text = "رمز عبور اختصاصی...",
+                                                text = strings.loginPasswordPlaceholder,
                                                 color = placeholderColor,
                                                 fontSize = 13.sp,
                                                 textAlign = TextAlign.Right,
@@ -557,7 +580,7 @@ fun LoginScreen(
                                             IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
                                                 Icon(
                                                     imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                                    contentDescription = "نمایش یا پنهان‌سازی رمز عبور",
+                                                    contentDescription = strings.loginPasswordLabel,
                                                     tint = if (isPasswordVisible) brandCyan else placeholderColor,
                                                     modifier = Modifier.size(20.dp)
                                                 )
@@ -566,7 +589,7 @@ fun LoginScreen(
                                         trailingIcon = {
                                             Icon(
                                                 imageVector = Icons.Outlined.Lock,
-                                                contentDescription = "آیکون رمز عبور",
+                                                contentDescription = strings.loginPasswordLabel,
                                                 tint = if (isPasswordFocused) brandCyan else placeholderColor,
                                                 modifier = Modifier.size(20.dp)
                                             )
@@ -582,7 +605,7 @@ fun LoginScreen(
                                             onDone = {
                                                 focusManager.clearFocus()
                                                 if (username.isBlank() || password.isBlank()) {
-                                                    localValidationMsg = "لطفاً نام کاربری و کلمه عبور را وارد فرمایید"
+                                                    localValidationMsg = strings.loginValidationEmpty
                                                 } else {
                                                     viewModel.login(username.trim(), password.trim())
                                                 }
@@ -592,10 +615,10 @@ fun LoginScreen(
                                             .fillMaxWidth()
                                             .testTag("password_input"),
                                         colors = OutlinedTextFieldDefaults.colors(
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = textSecondary,
+                                            focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                                            unfocusedTextColor = if (isDark) textSecondary else Color(0xFF334155),
                                             focusedBorderColor = brandCyan,
-                                            unfocusedBorderColor = borderStrokeColor,
+                                            unfocusedBorderColor = if (isDark) borderStrokeColor else Color(0xFFCBD5E1),
                                             cursorColor = brandCyan,
                                             focusedContainerColor = inputFocusBg,
                                             unfocusedContainerColor = inputBg
@@ -606,7 +629,7 @@ fun LoginScreen(
 
                                 Spacer(modifier = Modifier.height(14.dp))
 
-                                // "مرا به خاطر بسپار" Checkbox Row (Right-Aligned)
+                                // Remember Me Checkbox Row
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -618,8 +641,8 @@ fun LoginScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "مرا به خاطر بسپار",
-                                        color = textMuted,
+                                        text = strings.loginRememberMe,
+                                        color = if (isDark) textMuted else Color(0xFF475569),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -629,8 +652,8 @@ fun LoginScreen(
                                         onCheckedChange = { rememberMe = it },
                                         colors = CheckboxDefaults.colors(
                                             checkedColor = brandCyan,
-                                            uncheckedColor = borderStrokeColor,
-                                            checkmarkColor = Color(0xFF060912)
+                                            uncheckedColor = if (isDark) borderStrokeColor else Color(0xFF94A3B8),
+                                            checkmarkColor = if (isDark) Color(0xFF060912) else Color.White
                                         ),
                                         modifier = Modifier.size(22.dp)
                                     )
@@ -668,7 +691,7 @@ fun LoginScreen(
                                         .clickable(enabled = loginState !is LoginState.Loading) {
                                             focusManager.clearFocus()
                                             if (username.isBlank() || password.isBlank()) {
-                                                localValidationMsg = "لطفاً نام کاربری و کلمه عبور را وارد فرمایید"
+                                                localValidationMsg = strings.loginValidationEmpty
                                             } else {
                                                 localValidationMsg = null
                                                 viewModel.login(username.trim(), password.trim())
@@ -689,7 +712,7 @@ fun LoginScreen(
                                             )
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Text(
-                                                text = "در حال اعتبارسنجی و ورود...",
+                                                text = strings.loginValidating,
                                                 color = Color.White,
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.Bold
@@ -708,7 +731,7 @@ fun LoginScreen(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = "ورود به حساب کاربری",
+                                                text = strings.loginButtonSubmit,
                                                 color = Color.White,
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold
@@ -719,25 +742,25 @@ fun LoginScreen(
 
                                 Spacer(modifier = Modifier.height(24.dp))
 
-                                // Divider with "یا"
+                                // Divider with "یا" / "OR"
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     HorizontalDivider(
                                         modifier = Modifier.weight(1f),
-                                        color = borderStrokeColor,
+                                        color = if (isDark) borderStrokeColor else Color(0xFFE2E8F0),
                                         thickness = 0.7.dp
                                     )
                                     Text(
-                                        text = "یا",
-                                        color = Color(0xFF64748B),
+                                        text = strings.loginOrDivider,
+                                        color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
                                         fontSize = 11.sp,
                                         modifier = Modifier.padding(horizontal = 12.dp)
                                     )
                                     HorizontalDivider(
                                         modifier = Modifier.weight(1f),
-                                        color = borderStrokeColor,
+                                        color = if (isDark) borderStrokeColor else Color(0xFFE2E8F0),
                                         thickness = 0.7.dp
                                     )
                                 }
@@ -746,8 +769,8 @@ fun LoginScreen(
 
                                 // Informational Text
                                 Text(
-                                    text = "جهت دریافت نام کاربری و رمز عبور ابتدا اشتراک تهیه کنید",
-                                    color = Color(0xFF94A3B8),
+                                    text = strings.loginNeedAccountHint,
+                                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     textAlign = TextAlign.Center,
@@ -763,12 +786,12 @@ fun LoginScreen(
                                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://gmb-net.ir"))
                                             context.startActivity(intent)
                                         } catch (e: Exception) {
-                                            Toast.makeText(context, "خطا در باز کردن مرورگر", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, strings.errorOpeningBrowser, Toast.LENGTH_SHORT).show()
                                         }
                                     },
                                     shape = RoundedCornerShape(14.dp),
-                                    color = Color(0xFF0F2642),
-                                    border = BorderStroke(1.dp, Color(0xFF0284C7).copy(alpha = 0.6f)),
+                                    color = if (isDark) Color(0xFF0F2642) else Color(0xFFE0F2FE),
+                                    border = BorderStroke(1.dp, if (isDark) Color(0xFF0284C7).copy(alpha = 0.6f) else Color(0xFF38BDF8)),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(48.dp)
@@ -787,8 +810,8 @@ fun LoginScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "خرید اشتراک",
-                                            color = electricSky,
+                                            text = strings.loginBuySubscription,
+                                            color = if (isDark) electricSky else Color(0xFF0284C7),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -811,7 +834,7 @@ fun LoginScreen(
                                 .widthIn(max = 440.dp)
                                 .padding(top = 16.dp)
                                 .border(1.dp, neonRed.copy(alpha = 0.5f), RoundedCornerShape(18.dp)),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF25101A)),
+                            colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF25101A) else Color(0xFFFEF2F2)),
                             shape = RoundedCornerShape(18.dp)
                         ) {
                             Row(
@@ -821,7 +844,7 @@ fun LoginScreen(
                             ) {
                                 Text(
                                     text = errorMsg,
-                                    color = Color(0xFFFCA5A5),
+                                    color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626),
                                     fontSize = 13.sp,
                                     textAlign = TextAlign.Right,
                                     modifier = Modifier.weight(1f),
@@ -837,7 +860,7 @@ fun LoginScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ErrorOutline,
-                                        contentDescription = "خطا در ورود",
+                                        contentDescription = null,
                                         tint = neonRed,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -850,8 +873,8 @@ fun LoginScreen(
 
                     // Minimal Footer Info
                     Text(
-                        text = "قدرت گرفته توسط گمبرون نت",
-                        color = Color(0xFF64748B),
+                        text = strings.loginPoweredBy,
+                        color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center

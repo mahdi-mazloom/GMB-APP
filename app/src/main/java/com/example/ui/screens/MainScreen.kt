@@ -52,6 +52,7 @@ import com.example.viewmodel.RedeemLicenseUiState
 import com.example.viewmodel.VpnViewModel
 import com.example.util.PersianDateHelper
 import com.example.util.BatteryOptimizationHelper
+import com.example.util.LocalAppStrings
 import java.util.Locale
 
 @Composable
@@ -62,6 +63,7 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val strings = LocalAppStrings.current
     val activeSession by viewModel.activeSession.collectAsState()
     val loginState by viewModel.loginState.collectAsState()
 
@@ -95,9 +97,10 @@ fun MainScreen(
     val reconnectAttempts by viewModel.reconnectAttempts.collectAsState()
     val lastReconnectReason by viewModel.lastReconnectReason.collectAsState()
 
-    // Dialog state for renewal, voucher redeem, and logout
+    // Dialog state for renewal, voucher redeem, settings, and logout
     var showRenewDialog by remember { mutableStateOf(false) }
     var showRedeemLicenseDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     val redeemLicenseState by viewModel.redeemLicenseState.collectAsState()
 
@@ -142,24 +145,39 @@ fun MainScreen(
         }
     }
 
-    // Modern 2026 Cyber Obsidian & Electric Glass Design System
-    val deepNavyBg = Color(0xFF060912)
-    val surfaceElevatedColor = Color(0xFF0E172A)
-    val borderStrokeColor = Color(0xFF1E293B)
-    val brandCyan = Color(0xFF00E5FF)
-    val electricSky = Color(0xFF38BDF8)
-    val brandPurple = Color(0xFFA855F7)
-    val neonGreen = Color(0xFF10B981)
-    val neonOrange = Color(0xFFF97316)
-    val neonRed = Color(0xFFEF4444)
-    val neonYellow = Color(0xFFFACC15)
+    // Modern 2026 Adaptive Design System
+    val colors = com.example.ui.theme.AppTheme.colors
+    val isDark = colors.isDark
 
-    val cardGradient = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF111C32),
-            Color(0xFF090F1C)
+    val deepNavyBg = colors.background
+    val surfaceElevatedColor = colors.surfaceElevated
+    val borderStrokeColor = colors.cardBorder
+    val brandCyan = colors.brandCyan
+    val electricSky = colors.electricSky
+    val brandPurple = colors.brandPurple
+    val neonGreen = colors.neonGreen
+    val neonOrange = colors.neonOrange
+    val neonRed = colors.neonRed
+    val neonYellow = colors.neonYellow
+
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+
+    val cardGradient = if (isDark) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF111C32),
+                Color(0xFF090F1C)
+            )
         )
-    )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0xFFF1F5F9)
+            )
+        )
+    }
 
     // Animated aura based on connection status or expiration
     val auraColor by animateColorAsState(
@@ -218,7 +236,7 @@ fun MainScreen(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                Color(0xFF0B1222),
+                                colors.backgroundGradientTop,
                                 deepNavyBg
                             )
                         )
@@ -228,8 +246,8 @@ fun MainScreen(
             ) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color(0xCC0E1729),
-                    border = BorderStroke(1.dp, Color(0x2E38BDF8)),
+                    color = if (isDark) Color(0xCC0E1729) else Color(0xF0FFFFFF),
+                    border = BorderStroke(1.dp, if (isDark) Color(0x2E38BDF8) else Color(0x330284C7)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -239,19 +257,21 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Logout button with subtle glass ring
+                        // Settings button with subtle glass ring & cyber glow
                         IconButton(
-                            onClick = { showLogoutDialog = true },
+                            onClick = { showSettingsDialog = true },
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF131F35))
+                                .background(if (isDark) Color(0xFF131F35) else Color(0xFFE2E8F0))
+                                .border(1.dp, if (isDark) Color(0x3338BDF8) else Color(0x330284C7), CircleShape)
+                                .testTag("top_settings_button")
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Logout,
-                                contentDescription = "خروج از حساب",
-                                tint = Color(0xFF94A3B8),
-                                modifier = Modifier.size(18.dp)
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = strings.settingsTitle,
+                                tint = electricSky,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
@@ -261,16 +281,14 @@ fun MainScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Image(
-                                painter = painterResource(id = R.drawable.gmb_logo),
+                                painter = painterResource(id = R.drawable.ic_gmb_logo),
                                 contentDescription = "GMB NET Logo",
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(RoundedCornerShape(7.dp))
+                                modifier = Modifier.size(30.dp)
                             )
                             Text(
                                 text = "GMB NET",
                                 fontSize = 17.sp,
-                                color = Color.White,
+                                color = if (isDark) Color.White else Color(0xFF0F172A),
                                 fontWeight = FontWeight.ExtraBold,
                                 letterSpacing = 1.5.sp
                             )
@@ -287,7 +305,7 @@ fun MainScreen(
                         Surface(
                             onClick = { showRenewDialog = true },
                             shape = RoundedCornerShape(12.dp),
-                            color = if (isExpired) neonRed.copy(alpha = 0.15f) else Color(0xFF0F2642),
+                            color = if (isExpired) neonRed.copy(alpha = 0.15f) else if (isDark) Color(0xFF0F2642) else Color(0xFFE0F2FE),
                             border = BorderStroke(1.dp, if (isExpired) neonRed.copy(alpha = 0.5f) else Color(0xFF0284C7).copy(alpha = 0.5f)),
                             modifier = Modifier.testTag("top_shop_button")
                         ) {
@@ -297,14 +315,14 @@ fun MainScreen(
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Text(
-                                    text = if (isExpired) "تمدید" else "فروشگاه",
+                                    text = if (isExpired) strings.renew else strings.store,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isExpired) Color(0xFFFCA5A5) else electricSky
                                 )
                                 Icon(
                                     imageVector = Icons.Default.ShoppingBag,
-                                    contentDescription = "فروشگاه و تمدید اشتراک",
+                                    contentDescription = strings.storeAndRenewTitleModal,
                                     tint = if (isExpired) neonRed else brandCyan,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -321,9 +339,9 @@ fun MainScreen(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            Color(0xFF0A1224),
+                            colors.backgroundGradientTop,
                             deepNavyBg,
-                            Color(0xFF04060C)
+                            colors.backgroundGradientBottom
                         )
                     )
                 )
@@ -356,9 +374,12 @@ fun MainScreen(
                                 .fillMaxWidth()
                                 .background(
                                     Brush.horizontalGradient(
-                                        listOf(
+                                        if (isDark) listOf(
                                             Color(0xFF3F0B11),
                                             Color(0xFF1E0A12)
+                                        ) else listOf(
+                                            Color(0xFFFEE2E2),
+                                            Color(0xFFFECACA)
                                         )
                                     )
                                 )
@@ -376,7 +397,7 @@ fun MainScreen(
                                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = "تمدید اشتراک",
+                                        text = strings.renew,
                                         color = Color.White,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
@@ -389,15 +410,15 @@ fun MainScreen(
                                 ) {
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text(
-                                            text = "اشتراک شما به پایان رسیده است",
-                                            color = Color.White,
+                                            text = strings.subscriptionExpiredNoticeCard,
+                                            color = if (isDark) Color.White else Color(0xFF991B1B),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Right
                                         )
                                         Text(
-                                            text = "اتصال مسدود است • لمس جهت تمدید آنلاین",
-                                            color = Color(0xFFFCA5A5),
+                                            text = strings.subscriptionExpiredTouchToRenew,
+                                            color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C),
                                             fontSize = 11.sp,
                                             textAlign = TextAlign.Right
                                         )
@@ -412,7 +433,7 @@ fun MainScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.LockClock,
-                                            contentDescription = "Expired notice",
+                                            contentDescription = strings.subscriptionExpiredNoticeCard,
                                             tint = neonRed,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -440,7 +461,7 @@ fun MainScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFF2A1C08))
+                                .background(if (isDark) Color(0xFF2A1C08) else Color(0xFFFEF3C7))
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -449,11 +470,11 @@ fun MainScreen(
                                 onClick = { showRenewDialog = true },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                             ) {
-                                Text("تمدید سریع", color = neonYellow, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(strings.fastRenew, color = if (isDark) neonYellow else Color(0xFFB45309), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                             Text(
-                                text = "تنها $daysLeft روز از اشتراک شما باقی مانده است",
-                                color = Color(0xFFFEF08A),
+                                text = strings.subscriptionExpiringDays(daysLeft),
+                                color = if (isDark) Color(0xFFFEF08A) else Color(0xFF92400E),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 textAlign = TextAlign.Right
@@ -473,20 +494,20 @@ fun MainScreen(
                 }
 
                 val statusLabel = when {
-                    isExpired -> "اشتراک منقضی شده است (اتصال مسدود)"
-                    status == VpnStatus.CONNECTED -> "اتصال با رمزگذاری سرتاسری فعال است"
-                    status == VpnStatus.CONNECTING -> "در حال برقراری ارتباط با سرور امن..."
+                    isExpired -> strings.statusSubscriptionExpired
+                    status == VpnStatus.CONNECTED -> strings.statusEncryptedActive
+                    status == VpnStatus.CONNECTING -> strings.tunnelConnectingServer
                     status == VpnStatus.RECONNECTING -> {
                         if (!isNetworkAvailable) {
-                            "اینترنت قطع شد - در انتظار اتصال به شبکه..."
+                            strings.tunnelInternetDisconnectedWaiting
                         } else if (reconnectAttempts > 0) {
-                            "در حال اتصال مجدد خودکار (تلاش $reconnectAttempts)..."
+                            strings.tunnelReconnectingAttempt(reconnectAttempts)
                         } else {
-                            "در حال برقراری مجدد تونل ارتباطی..."
+                            strings.tunnelReconnecting
                         }
                     }
-                    status == VpnStatus.ERROR -> "خطا در برقراری اتصال - لمس جهت تلاش مجدد"
-                    else -> "آماده اتصال - برای شروع لمس کنید"
+                    status == VpnStatus.ERROR -> strings.tunnelErrorTapToRetry
+                    else -> strings.tunnelReadyTapToStart
                 }
 
                 Column(
@@ -521,7 +542,7 @@ fun MainScreen(
                             modifier = Modifier
                                 .size(184.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF091122))
+                                .background(if (isDark) Color(0xFF091122) else Color(0xFFE2E8F0))
                                 .drawBehind {
                                     if (status == VpnStatus.CONNECTED || status == VpnStatus.CONNECTING || status == VpnStatus.RECONNECTING) {
                                         // Draw futuristic rotating neon arc
@@ -542,7 +563,7 @@ fun MainScreen(
                                     } else {
                                         // Subtle static ambient ring
                                         drawCircle(
-                                            color = if (isExpired) neonRed.copy(alpha = 0.4f) else Color(0x3338BDF8),
+                                            color = if (isExpired) neonRed.copy(alpha = 0.4f) else if (isDark) Color(0x3338BDF8) else Color(0x660284C7),
                                             style = Stroke(width = 1.5.dp.toPx())
                                         )
                                     }
@@ -588,9 +609,15 @@ fun MainScreen(
                                             status == VpnStatus.ERROR -> Brush.radialGradient(
                                                 listOf(neonRed.copy(alpha = 0.85f), Color(0xFF7F1D1D), Color(0xFF070B14))
                                             )
-                                            else -> Brush.radialGradient(
-                                                listOf(Color(0xFF1E2E4A), Color(0xFF0F1A2E), Color(0xFF070C18))
-                                            )
+                                            else -> if (isDark) {
+                                                Brush.radialGradient(
+                                                    listOf(Color(0xFF1E2E4A), Color(0xFF0F1A2E), Color(0xFF070C18))
+                                                )
+                                            } else {
+                                                Brush.radialGradient(
+                                                    listOf(Color(0xFFF0F9FF), Color(0xFFE0F2FE), Color(0xFFBAE6FD))
+                                                )
+                                            }
                                         }
                                     )
                                     .border(
@@ -619,7 +646,7 @@ fun MainScreen(
                                             else -> Icons.Default.PowerSettingsNew
                                         },
                                         contentDescription = "وضعیت اتصال",
-                                        tint = if (isExpired) Color(0xFFFCA5A5) else if (status != VpnStatus.DISCONNECTED) Color.White else brandCyan,
+                                        tint = if (isExpired) Color(0xFFFCA5A5) else if (status != VpnStatus.DISCONNECTED) Color.White else (if (isDark) brandCyan else Color(0xFF0284C7)),
                                         modifier = Modifier.size(42.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -632,7 +659,7 @@ fun MainScreen(
                                             status == VpnStatus.ERROR -> "ERROR"
                                             else -> "START"
                                         },
-                                        color = Color.White,
+                                        color = if (status != VpnStatus.DISCONNECTED || isDark) Color.White else Color(0xFF0F172A),
                                         fontSize = 12.sp,
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Black,
@@ -648,8 +675,8 @@ fun MainScreen(
                     // Futuristic Status Pill with Glowing Beacon
                     Surface(
                         shape = RoundedCornerShape(24.dp),
-                        color = Color(0xFF0E172A),
-                        border = BorderStroke(1.dp, auraColor.copy(alpha = 0.4f)),
+                        color = if (isDark) Color(0xFF0E172A) else Color(0xFFFFFFFF),
+                        border = BorderStroke(1.dp, if (isDark) auraColor.copy(alpha = 0.4f) else auraColor.copy(alpha = 0.6f)),
                         modifier = Modifier.padding(horizontal = 8.dp)
                     ) {
                         Row(
@@ -659,7 +686,7 @@ fun MainScreen(
                         ) {
                             Text(
                                 text = statusLabel,
-                                color = if (isExpired) Color(0xFFFCA5A5) else if (status != VpnStatus.DISCONNECTED) Color.White else Color(0xFFCBD5E1),
+                                color = if (isExpired) Color(0xFFDC2626) else if (status != VpnStatus.DISCONNECTED) (if (isDark) Color.White else Color(0xFF0F172A)) else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 textAlign = TextAlign.Center
@@ -692,12 +719,12 @@ fun MainScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
-                                    contentDescription = "اتصال مجدد خودکار",
+                                    contentDescription = strings.statusReconnectingAttempt(reconnectAttempts),
                                     tint = neonOrange,
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Text(
-                                    text = if (!isNetworkAvailable) "سیستم آماده‌باش: منتظر برقراری اینترنت" else "بازیابی هوشمند فعال است (تلاش $reconnectAttempts)",
+                                    text = if (!isNetworkAvailable) strings.standbyWaitingForInternet else strings.smartRecoveryActive(reconnectAttempts),
                                     color = Color(0xFFFFEDD5),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium
@@ -733,16 +760,64 @@ fun MainScreen(
                                 )
                                 Icon(
                                     imageVector = Icons.Default.Timer,
-                                    contentDescription = "مدت اتصال",
+                                    contentDescription = strings.connectionDuration,
                                     tint = neonGreen,
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Text(
-                                    text = "مدت اتصال:",
+                                    text = strings.connectionDuration,
                                     color = Color(0xFFD1FAE5),
                                     fontSize = 11.sp
                                 )
                             }
+                        }
+                    }
+
+                    // Intelligent Operator & Protocol Indicator
+                    val currentOperator = remember(status) { com.example.util.OperatorDetector.detectOperator(context) }
+                    val activeProtocol by com.example.vpn.SshVpnService.activeProtocolName.collectAsState()
+                    val operatorText = when (currentOperator) {
+                        com.example.util.OperatorType.IRANCELL -> strings.operatorIrancellTag
+                        com.example.util.OperatorType.RIGHTEL -> strings.operatorRightelTag
+                        com.example.util.OperatorType.MCI -> strings.operatorMciTag
+                        else -> strings.operatorWifiTag
+                    }
+                    val operatorColor = when (currentOperator) {
+                        com.example.util.OperatorType.IRANCELL -> Color(0xFFF59E0B)
+                        com.example.util.OperatorType.RIGHTEL -> Color(0xFF8B5CF6)
+                        com.example.util.OperatorType.MCI -> Color(0xFF06B6D4)
+                        else -> Color(0xFF64748B)
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isDark) Color(0xFF131F35) else Color(0xFFF1F5F9),
+                        border = BorderStroke(1.dp, operatorColor.copy(alpha = 0.4f)),
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(operatorColor)
+                            )
+                            Text(
+                                text = if (status == VpnStatus.CONNECTED) activeProtocol else operatorText,
+                                color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Icon(
+                                imageVector = Icons.Default.SignalCellularAlt,
+                                contentDescription = null,
+                                tint = operatorColor,
+                                modifier = Modifier.size(14.dp)
+                            )
                         }
                     }
                 }
@@ -750,13 +825,13 @@ fun MainScreen(
                 // 3. Telemetry Cockpit (Live Traffic Counters)
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFF0F1A2F),
+                    color = if (isDark) Color(0xFF0F1A2F) else Color(0xFFFFFFFF),
                     border = BorderStroke(
                         1.dp,
                         Brush.linearGradient(
                             listOf(
-                                Color(0x4038BDF8),
-                                Color(0x1538BDF8),
+                                if (isDark) Color(0x4038BDF8) else Color(0x330284C7),
+                                if (isDark) Color(0x1538BDF8) else Color(0x1A0284C7),
                                 Color(0x30A855F7)
                             )
                         )
@@ -785,20 +860,20 @@ fun MainScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowDownward,
-                                    contentDescription = "دانلود",
+                                    contentDescription = strings.downloadLabelLong,
                                     tint = brandCyan,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
                             Text(
-                                text = "دریافت (دانلود)",
-                                color = Color(0xFF94A3B8),
+                                text = strings.downloadLabelLong,
+                                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
                                 text = formatBytes(rx),
-                                color = Color.White,
+                                color = if (isDark) Color.White else Color(0xFF0F172A),
                                 fontSize = 14.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
@@ -810,7 +885,7 @@ fun MainScreen(
                             modifier = Modifier
                                 .height(38.dp)
                                 .width(1.dp)
-                                .background(Color(0xFF1E293B))
+                                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0))
                         )
 
                         // Upload Telemetry Item
@@ -828,20 +903,20 @@ fun MainScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
-                                    contentDescription = "آپلود",
+                                    contentDescription = strings.uploadLabelLong,
                                     tint = brandPurple,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
                             Text(
-                                text = "ارسال (آپلود)",
-                                color = Color(0xFF94A3B8),
+                                text = strings.uploadLabelLong,
+                                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
                                 text = formatBytes(tx),
-                                color = Color.White,
+                                color = if (isDark) Color.White else Color(0xFF0F172A),
                                 fontSize = 14.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
@@ -861,9 +936,9 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         InfoStatBox(
-                            title = "نام کاربری",
-                            value = session?.username ?: "بدون حساب",
-                            subtitle = if (isExpired) "منقضی شده" else "اشتراک فعال",
+                            title = strings.usernameCard,
+                            value = session?.username ?: strings.noAccount,
+                            subtitle = if (isExpired) strings.expired else strings.activeSubscription,
                             icon = Icons.Default.AccountCircle,
                             iconColor = if (isExpired) neonRed else brandPurple,
                             cardGradient = cardGradient,
@@ -872,9 +947,9 @@ fun MainScreen(
                         )
 
                         InfoStatBox(
-                            title = "زمان باقی‌مانده",
-                            value = if (isExpired) "۰ روز" else "$daysLeft روز",
-                            subtitle = if (isExpired) "نیازمند تمدید فوری" else if (daysLeft > 5) "اعتبار معتبر" else "رو به پایان",
+                            title = strings.remainingTime,
+                            value = if (isExpired) strings.zeroDays else strings.daysUnit(daysLeft),
+                            subtitle = if (isExpired) strings.urgentRenewNeeded else if (daysLeft > 5) strings.validSubscription else strings.endingSoon,
                             icon = Icons.Default.HourglassBottom,
                             iconColor = if (isExpired) neonRed else if (daysLeft > 5) brandCyan else neonYellow,
                             cardGradient = cardGradient,
@@ -894,9 +969,9 @@ fun MainScreen(
                         )
 
                         InfoStatBox(
-                            title = "تاریخ پایان (شمسی)",
+                            title = strings.finishDateSolar,
                             value = expiryShamsi,
-                            subtitle = if (isExpired) "پایان دوره" else "تقویم جلالی",
+                            subtitle = if (isExpired) strings.periodEnd else strings.jalaliCalendar,
                             icon = Icons.Default.CalendarMonth,
                             iconColor = if (isExpired) neonRed else Color(0xFFF59E0B),
                             cardGradient = cardGradient,
@@ -915,13 +990,13 @@ fun MainScreen(
                         }
                         val totalLimitMb = session?.totalTrafficMb ?: 0L
                         val trafficSub = if (totalLimitMb > 0) {
-                            "سقف: ${if (totalLimitMb >= 1024) String.format(Locale.getDefault(), "%.0f GB", totalLimitMb / 1024.0) else "$totalLimitMb MB"}"
+                            strings.trafficLimit(if (totalLimitMb >= 1024) String.format(Locale.getDefault(), "%.0f GB", totalLimitMb / 1024.0) else "$totalLimitMb MB")
                         } else {
-                            "ترافیک نامحدود"
+                            strings.unlimitedTraffic
                         }
 
                         InfoStatBox(
-                            title = "حجم مصرفی",
+                            title = strings.trafficUsage,
                             value = consumedDisplay,
                             subtitle = trafficSub,
                             icon = Icons.Default.DataUsage,
@@ -938,8 +1013,8 @@ fun MainScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(20.dp)),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0F1D)),
+                            .border(1.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFCBD5E1), RoundedCornerShape(20.dp)),
+                        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF0A0F1D) else Color(0xFFFFFFFF)),
                         shape = RoundedCornerShape(20.dp)
                     ) {
                         Column(
@@ -966,7 +1041,7 @@ fun MainScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Close,
-                                            contentDescription = "بستن",
+                                            contentDescription = strings.close,
                                             tint = Color(0xFF64748B),
                                             modifier = Modifier.size(16.dp)
                                         )
@@ -983,7 +1058,7 @@ fun MainScreen(
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                                     ) {
                                         Text(
-                                            text = "رفع محدودیت باتری",
+                                            text = strings.batteryCardFix,
                                             color = Color.Black,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold
@@ -997,13 +1072,13 @@ fun MainScreen(
                                 ) {
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text(
-                                            text = "پایداری پس‌زمینه و مصرف بهینه",
-                                            color = Color.White,
+                                            text = strings.batteryCardTitle,
+                                            color = if (isDark) Color.White else Color(0xFF0F172A),
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "جلوگیری از قطع اتصال هنگام خاموشی صفحه",
+                                            text = strings.batteryCardSubtitle,
                                             color = neonOrange,
                                             fontSize = 10.sp
                                         )
@@ -1032,34 +1107,34 @@ fun MainScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Surface(
-                                    color = Color(0xFF1E293B),
+                                    color = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
-                                        text = "MTU ۱۴۰۰ ضدافت‌سرعت",
-                                        color = Color(0xFF94A3B8),
+                                        text = strings.batteryCardDesc,
+                                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
                                         fontSize = 9.sp,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
                                 Surface(
-                                    color = Color(0xFF1E293B),
+                                    color = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
-                                        text = "پردازش کم‌مصرف CPU",
-                                        color = Color(0xFF94A3B8),
+                                        text = strings.batteryCardCpu,
+                                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
                                         fontSize = 9.sp,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
                                 Surface(
-                                    color = Color(0xFF1E293B),
+                                    color = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
-                                        text = "سازگار با اندروید ۷ تا ۱۵",
-                                        color = Color(0xFF94A3B8),
+                                        text = strings.batteryCardAndroid,
+                                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
                                         fontSize = 9.sp,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
@@ -1083,7 +1158,7 @@ fun MainScreen(
 
         AlertDialog(
             onDismissRequest = { showRenewDialog = false },
-            containerColor = Color(0xFF0D1527),
+            containerColor = if (isDark) Color(0xFF0D1527) else Color(0xFFFFFFFF),
             shape = RoundedCornerShape(24.dp),
             title = null,
             text = {
@@ -1117,8 +1192,8 @@ fun MainScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = if (isExpired) "پایان اعتبار اشتراک" else "فروشگاه و تمدید اشتراک",
-                        color = Color.White,
+                        text = if (isExpired) strings.subscriptionExpiredTitleModal else strings.storeAndRenewTitleModal,
+                        color = if (isDark) Color.White else Color(0xFF0F172A),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
@@ -1128,10 +1203,10 @@ fun MainScreen(
 
                     Text(
                         text = if (isExpired)
-                            "اعتبار اشتراک شما به پایان رسیده است. جهت تمدید با کد لایسنس یا خرید اشتراک از فروشگاه اقدام فرمایید."
+                            strings.subscriptionExpiredDescModal
                         else
-                            "جهت خرید اشتراک یا تمدید با کد لایسنس، گزینه مورد نظر را انتخاب کنید.",
-                        color = Color(0xFFCBD5E1),
+                            strings.subscriptionActiveDescModal,
+                        color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
                         lineHeight = 20.sp
@@ -1142,7 +1217,7 @@ fun MainScreen(
                     // Account Summary Card inside Dialog
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF162036)),
+                        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF162036) else Color(0xFFF1F5F9)),
                         shape = RoundedCornerShape(14.dp)
                     ) {
                         Column(
@@ -1154,15 +1229,15 @@ fun MainScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = session?.username ?: "بدون حساب",
-                                    color = Color.White,
+                                    text = session?.username ?: strings.noAccount,
+                                    color = if (isDark) Color.White else Color(0xFF0F172A),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Text("نام کاربری:", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                                Text(strings.usernameFieldLabel, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), fontSize = 12.sp)
                             }
 
-                            HorizontalDivider(color = Color(0xFF263554), thickness = 0.5.dp)
+                            HorizontalDivider(color = if (isDark) Color(0xFF263554) else Color(0xFFCBD5E1), thickness = 0.5.dp)
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1174,22 +1249,22 @@ fun MainScreen(
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Text("تاریخ پایان:", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                                Text(strings.finishDateFieldLabel, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), fontSize = 12.sp)
                             }
 
-                            HorizontalDivider(color = Color(0xFF263554), thickness = 0.5.dp)
+                            HorizontalDivider(color = if (isDark) Color(0xFF263554) else Color(0xFFCBD5E1), thickness = 0.5.dp)
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = if (isExpired) "منقضی شده" else "$daysLeft روز باقی‌مانده",
+                                    text = if (isExpired) strings.expired else strings.daysRemainingUnit(daysLeft),
                                     color = if (isExpired) neonRed else brandCyan,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Text("وضعیت حساب:", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                                Text(strings.accountStatusFieldLabel, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), fontSize = 12.sp)
                             }
                         }
                     }
@@ -1220,7 +1295,7 @@ fun MainScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "تمدید با کد لایسنس",
+                            text = strings.renewWithLicenseCode,
                             color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
@@ -1236,7 +1311,7 @@ fun MainScreen(
                                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://gmb-net.ir"))
                                 context.startActivity(intent)
                             } catch (e: Exception) {
-                                Toast.makeText(context, "خطا در باز کردن مرورگر", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, strings.errorOpeningBrowser, Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier
@@ -1246,19 +1321,19 @@ fun MainScreen(
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.8f)),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = Color(0xFF0F172A)
+                            containerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFEFF6FF)
                         )
                     ) {
                         Icon(
                             imageVector = Icons.Default.ShoppingBag,
                             contentDescription = null,
-                            tint = Color(0xFF60A5FA),
+                            tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "ورود به فروشگاه",
-                            color = Color(0xFF93C5FD),
+                            text = strings.enterStore,
+                            color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1275,18 +1350,18 @@ fun MainScreen(
                             .fillMaxWidth()
                             .height(42.dp),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color(0xFF334155))
+                        border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
                     ) {
                         Icon(
                             imageVector = Icons.Default.Sync,
                             contentDescription = null,
-                            tint = Color(0xFF94A3B8),
+                            tint = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "استعلام مجدد وضعیت حساب",
-                            color = Color(0xFFCBD5E1),
+                            text = strings.recheckAccountStatus,
+                            color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
                             fontSize = 12.sp
                         )
                     }
@@ -1296,7 +1371,7 @@ fun MainScreen(
                     TextButton(
                         onClick = { showRenewDialog = false }
                     ) {
-                        Text("بستن", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                        Text(strings.close, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), fontSize = 12.sp)
                     }
                 }
             },
@@ -1317,7 +1392,7 @@ fun MainScreen(
                     viewModel.resetRedeemLicenseState()
                 }
             },
-            containerColor = Color(0xFF0F172A),
+            containerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFFFFFFF),
             shape = RoundedCornerShape(22.dp),
             title = {
                 Row(
@@ -1336,8 +1411,8 @@ fun MainScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "بستن",
-                            tint = Color(0xFF94A3B8)
+                            contentDescription = strings.close,
+                            tint = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                         )
                     }
 
@@ -1346,8 +1421,8 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "تمدید با کد لایسنس / ووچر",
-                            color = Color.White,
+                            text = strings.renewWithVoucherDialogTitle,
+                            color = if (isDark) Color.White else Color(0xFF0F172A),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Right
@@ -1375,8 +1450,8 @@ fun MainScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "کد لایسنس یا ووچر خریداری‌شده را جهت تمدید اعتبار اشتراک در کادر زیر وارد نمایید:",
-                        color = Color(0xFFCBD5E1),
+                        text = strings.enterVoucherPrompt,
+                        color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Right,
                         lineHeight = 19.sp,
@@ -1390,7 +1465,7 @@ fun MainScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFF1E293B), RoundedCornerShape(10.dp))
+                                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9), RoundedCornerShape(10.dp))
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -1403,8 +1478,8 @@ fun MainScreen(
                                 fontFamily = FontFamily.Monospace
                             )
                             Text(
-                                text = "حساب کاربری فعال:",
-                                color = Color(0xFF94A3B8),
+                                text = strings.activeAccountLabel,
+                                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                                 fontSize = 11.sp
                             )
                         }
@@ -1427,13 +1502,13 @@ fun MainScreen(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = if (isDark) Color.White else Color(0xFF0F172A),
                             textAlign = TextAlign.Center,
                             letterSpacing = 2.sp
                         ),
                         placeholder = {
                             Text(
-                                text = "مثال: GMB-VOUCHER-XXXX",
+                                text = strings.voucherExamplePlaceholder,
                                 color = Color(0xFF64748B),
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
@@ -1446,9 +1521,9 @@ fun MainScreen(
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF10B981),
-                            unfocusedBorderColor = Color(0xFF334155),
-                            focusedContainerColor = Color(0xFF090E17),
-                            unfocusedContainerColor = Color(0xFF090E17)
+                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                            focusedContainerColor = if (isDark) Color(0xFF090E17) else Color(0xFFF8FAFC),
+                            unfocusedContainerColor = if (isDark) Color(0xFF090E17) else Color(0xFFF8FAFC)
                         ),
                         leadingIcon = {
                             Icon(
@@ -1467,8 +1542,8 @@ fun MainScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Clear,
-                                            contentDescription = "پاک کردن",
-                                            tint = Color(0xFF94A3B8),
+                                            contentDescription = strings.clearField,
+                                            tint = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -1489,7 +1564,7 @@ fun MainScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ContentPaste,
-                                        contentDescription = "جای‌گذاری از کلیپ‌بورد",
+                                        contentDescription = strings.pasteFromClipboard,
                                         tint = brandCyan,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -1509,11 +1584,11 @@ fun MainScreen(
                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://gmb-net.ir"))
                                     context.startActivity(intent)
                                 } catch (e: Exception) {
-                                    Toast.makeText(context, "خطا در باز کردن مرورگر", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, strings.errorOpeningBrowser, Toast.LENGTH_SHORT).show()
                                 }
                             }
-                            .background(Color(0xFF0F1B33), RoundedCornerShape(10.dp))
-                            .border(BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.4f)), RoundedCornerShape(10.dp))
+                            .background(if (isDark) Color(0xFF0F1B33) else Color(0xFFEFF6FF), RoundedCornerShape(10.dp))
+                            .border(BorderStroke(1.dp, if (isDark) Color(0xFF2563EB).copy(alpha = 0.4f) else Color(0xFF3B82F6).copy(alpha = 0.5f)), RoundedCornerShape(10.dp))
                             .padding(horizontal = 10.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
@@ -1521,13 +1596,13 @@ fun MainScreen(
                         Icon(
                             imageVector = Icons.Default.ShoppingBag,
                             contentDescription = null,
-                            tint = Color(0xFF60A5FA),
+                            tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "کد لایسنس ندارید؟ خرید آنی از فروشگاه",
-                            color = Color(0xFF93C5FD),
+                            text = strings.dontHaveLicensePrompt,
+                            color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1541,7 +1616,7 @@ fun MainScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(Color(0xFF1E293B), RoundedCornerShape(10.dp))
+                                    .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9), RoundedCornerShape(10.dp))
                                     .padding(12.dp),
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
@@ -1553,8 +1628,8 @@ fun MainScreen(
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = "در حال ارسال و اعتبارسنجی لایسنس در سرور...",
-                                    color = Color(0xFFCBD5E1),
+                                    text = strings.validatingLicenseOnServer,
+                                    color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
                                     fontSize = 12.sp
                                 )
                             }
@@ -1564,7 +1639,7 @@ fun MainScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(Color(0xFF064E3B).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                    .background(if (isDark) Color(0xFF064E3B).copy(alpha = 0.5f) else Color(0xFFECFDF5), RoundedCornerShape(12.dp))
                                     .border(1.dp, Color(0xFF10B981), RoundedCornerShape(12.dp))
                                     .padding(12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -1575,7 +1650,7 @@ fun MainScreen(
                                 ) {
                                     Text(
                                         text = state.message,
-                                        color = Color(0xFFA7F3D0),
+                                        color = if (isDark) Color(0xFFA7F3D0) else Color(0xFF065F46),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center
@@ -1591,8 +1666,8 @@ fun MainScreen(
                                 if (state.daysAdded != null && state.daysAdded > 0) {
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "اعتبار اضافه شده: ${state.daysAdded} روز",
-                                        color = Color.White,
+                                        text = strings.creditAddedDays(state.daysAdded),
+                                        color = if (isDark) Color.White else Color(0xFF065F46),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -1600,8 +1675,8 @@ fun MainScreen(
                                 if (state.volumeGBAdded != null && state.volumeGBAdded > 0) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "حجم اضافه شده: ${state.volumeGBAdded} گیگابایت",
-                                        color = Color.White,
+                                        text = strings.trafficAddedGB(state.volumeGBAdded),
+                                        color = if (isDark) Color.White else Color(0xFF065F46),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -1613,7 +1688,7 @@ fun MainScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(Color(0xFF450A0A).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                    .background(if (isDark) Color(0xFF450A0A).copy(alpha = 0.5f) else Color(0xFFFEF2F2), RoundedCornerShape(12.dp))
                                     .border(1.dp, neonRed.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
                                     .padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -1627,7 +1702,7 @@ fun MainScreen(
                                 )
                                 Text(
                                     text = state.errorMessage,
-                                    color = Color(0xFFFCA5A5),
+                                    color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626),
                                     fontSize = 12.sp,
                                     textAlign = TextAlign.Right,
                                     modifier = Modifier.weight(1f)
@@ -1653,7 +1728,7 @@ fun MainScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = "تایید و بستن",
+                                text = strings.confirmAndClose,
                                 color = Color.White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
@@ -1683,7 +1758,7 @@ fun MainScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "در حال تمدید...",
+                                    text = strings.renewingProgress,
                                     color = Color.White,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
@@ -1697,7 +1772,7 @@ fun MainScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "تایید و تمدید اشتراک",
+                                    text = strings.confirmAndRenew,
                                     color = Color.White,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
@@ -1715,7 +1790,7 @@ fun MainScreen(
                                 }
                             }
                         ) {
-                            Text("انصراف", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                            Text(strings.cancelAction, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), fontSize = 12.sp)
                         }
                     }
                 }
@@ -1724,16 +1799,29 @@ fun MainScreen(
         )
     }
 
+    // --- DIALOG: Settings Dialog (Support, Speed Test, Sanitized Logs, Logout) ---
+    if (showSettingsDialog) {
+        SettingsDialog(
+            viewModel = viewModel,
+            activeSession = activeSession,
+            status = status,
+            onDismiss = { showSettingsDialog = false },
+            onLogoutRequest = {
+                showLogoutDialog = true
+            }
+        )
+    }
+
     // --- DIALOG: Logout Confirmation Dialog ---
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            containerColor = Color(0xFF0D1527),
+            containerColor = if (isDark) Color(0xFF0D1527) else Color(0xFFFFFFFF),
             shape = RoundedCornerShape(20.dp),
             title = {
                 Text(
-                    text = "خروج از حساب کاربری",
-                    color = Color.White,
+                    text = strings.logoutDialogTitle,
+                    color = if (isDark) Color.White else Color(0xFF0F172A),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Right,
@@ -1742,8 +1830,8 @@ fun MainScreen(
             },
             text = {
                 Text(
-                    text = "آیا اطمینان دارید که می‌خواهید از حساب خارج شوید؟ در صورت خروج، اتصال شما قطع خواهد شد.",
-                    color = Color(0xFFCBD5E1),
+                    text = strings.logoutDialogMessage,
+                    color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
                     fontSize = 13.sp,
                     textAlign = TextAlign.Right,
                     lineHeight = 20.sp,
@@ -1754,18 +1842,19 @@ fun MainScreen(
                 Button(
                     onClick = {
                         showLogoutDialog = false
+                        showSettingsDialog = false
                         viewModel.logout(context)
                         onNavigateBackToLogin()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = neonRed),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("خروج", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(strings.logout, color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) {
-                    Text("انصراف", color = Color(0xFF94A3B8))
+                    Text(strings.cancelAction, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
                 }
             }
         )
@@ -1782,7 +1871,7 @@ fun MainScreen(
                     viewModel.dismissUpdateDialog()
                 }
             },
-            containerColor = Color(0xFF0F172A),
+            containerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFFFFFFF),
             shape = RoundedCornerShape(22.dp),
             title = {
                 Row(
@@ -1796,7 +1885,7 @@ fun MainScreen(
                         border = BorderStroke(1.dp, if (update.isForceUpdate) neonRed else brandCyan)
                     ) {
                         Text(
-                            text = if (update.isForceUpdate) "بروزرسانی الزامی" else "نسخه ${update.latestVersionName}",
+                            text = if (update.isForceUpdate) strings.updateForceLabel else strings.updateVersionLabel(update.latestVersionName),
                             color = if (update.isForceUpdate) neonRed else brandCyan,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -1805,10 +1894,10 @@ fun MainScreen(
                     }
 
                     Text(
-                        text = "بروزرسانی GMB NET",
+                        text = strings.updateTitle,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = if (isDark) Color.White else Color(0xFF0F172A)
                     )
                 }
             },
@@ -1818,8 +1907,8 @@ fun MainScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "نسخه جدیدی از برنامه با بهینه‌سازی سرعت و پایداری منتشر شد.",
-                        color = Color(0xFFCBD5E1),
+                        text = strings.updateDesc,
+                        color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Right,
                         lineHeight = 18.sp,
@@ -1829,8 +1918,8 @@ fun MainScreen(
                     // Changelog Box
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF1E293B).copy(alpha = 0.6f),
-                        border = BorderStroke(1.dp, Color(0xFF334155))
+                        color = if (isDark) Color(0xFF1E293B).copy(alpha = 0.6f) else Color(0xFFF1F5F9),
+                        border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
                     ) {
                         Column(
                             modifier = Modifier
@@ -1839,8 +1928,8 @@ fun MainScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "تغییرات این نسخه:",
-                                color = Color(0xFF38BDF8),
+                                text = strings.updateChangelogTitle,
+                                color = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Right,
@@ -1848,7 +1937,7 @@ fun MainScreen(
                             )
                             Text(
                                 text = update.changelog,
-                                color = Color(0xFFE2E8F0),
+                                color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B),
                                 fontSize = 12.sp,
                                 lineHeight = 20.sp,
                                 textAlign = TextAlign.Right,
@@ -1874,8 +1963,8 @@ fun MainScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "در حال دانلود فایل نصب APK...",
-                                    color = Color(0xFF94A3B8),
+                                    text = strings.updateDownloadingProgress,
+                                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                                     fontSize = 12.sp
                                 )
                             }
@@ -1886,7 +1975,7 @@ fun MainScreen(
                                     .height(8.dp)
                                     .clip(RoundedCornerShape(4.dp)),
                                 color = brandCyan,
-                                trackColor = Color(0xFF1E293B)
+                                trackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
                             )
                         }
                     }
@@ -1909,7 +1998,7 @@ fun MainScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "دانلود و نصب مستقیم",
+                            text = strings.updateDirectInstall,
                             color = Color.Black,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
@@ -1922,7 +2011,7 @@ fun MainScreen(
                     TextButton(
                         onClick = { viewModel.dismissUpdateDialog() }
                     ) {
-                        Text(text = "بعداً یادآوری کن", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                        Text(text = strings.updateRemindLater, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), fontSize = 12.sp)
                     }
                 }
             }
@@ -1937,6 +2026,7 @@ fun StatItem(
     value: String,
     color: Color
 ) {
+    val isDark = com.example.ui.theme.AppTheme.colors.isDark
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(
             imageVector = icon,
@@ -1946,13 +2036,13 @@ fun StatItem(
         )
         Text(
             text = title,
-            color = Color.Gray,
+            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 4.dp)
         )
         Text(
             text = value,
-            color = Color.White,
+            color = if (isDark) Color.White else Color(0xFF0F172A),
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(top = 2.dp)
@@ -1985,15 +2075,18 @@ fun InfoStatBox(
     borderStrokeColor: Color,
     modifier: Modifier = Modifier
 ) {
+    val colors = com.example.ui.theme.AppTheme.colors
+    val isDark = colors.isDark
+
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF0D172B),
+        color = if (isDark) Color(0xFF0D172B) else Color(0xFFFFFFFF),
         border = BorderStroke(
             1.dp,
             Brush.linearGradient(
                 listOf(
                     iconColor.copy(alpha = 0.45f),
-                    Color(0x1FFFFFFF),
+                    if (isDark) Color(0x1FFFFFFF) else Color(0x1A000000),
                     iconColor.copy(alpha = 0.15f)
                 )
             )
@@ -2029,7 +2122,7 @@ fun InfoStatBox(
 
                 Text(
                     text = title,
-                    color = Color(0xFF94A3B8),
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -2039,7 +2132,7 @@ fun InfoStatBox(
 
             Text(
                 text = value,
-                color = Color.White,
+                color = if (isDark) Color.White else Color(0xFF0F172A),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.ExtraBold,
                 maxLines = 1,

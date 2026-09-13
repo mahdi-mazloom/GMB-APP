@@ -48,5 +48,25 @@ class ExampleRobolectricTest {
     assertEquals("testpass", config.password)
     assertEquals(7300, config.udpgwPort)
   }
+
+  @Test
+  fun `test AppThemeMode resolution and persistence`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    com.example.util.ThemePreferences.init(context)
+
+    assertEquals(com.example.ui.theme.AppThemeMode.LIGHT, com.example.ui.theme.AppThemeMode.fromKey("light"))
+    assertEquals(com.example.ui.theme.AppThemeMode.DARK, com.example.ui.theme.AppThemeMode.fromKey("dark"))
+    assertEquals(com.example.ui.theme.AppThemeMode.SYSTEM, com.example.ui.theme.AppThemeMode.fromKey("system"))
+    assertEquals(com.example.ui.theme.AppThemeMode.SYSTEM, com.example.ui.theme.AppThemeMode.fromKey(null))
+
+    com.example.util.ThemePreferences.setThemeMode(com.example.ui.theme.AppThemeMode.DARK)
+    assertEquals(com.example.ui.theme.AppThemeMode.DARK, com.example.util.ThemePreferences.themeMode.value)
+
+    com.example.util.ThemePreferences.setThemeMode(com.example.ui.theme.AppThemeMode.LIGHT)
+    assertEquals(com.example.ui.theme.AppThemeMode.LIGHT, com.example.util.ThemePreferences.themeMode.value)
+
+    com.example.util.ThemePreferences.setThemeMode(com.example.ui.theme.AppThemeMode.SYSTEM)
+    assertEquals(com.example.ui.theme.AppThemeMode.SYSTEM, com.example.util.ThemePreferences.themeMode.value)
+  }
 }
 

@@ -7,9 +7,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -19,6 +23,10 @@ import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.MainScreen
 import com.example.ui.screens.PurchaseScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.util.AppStrings
+import com.example.util.LanguagePreferences
+import com.example.util.LocalAppStrings
+import com.example.util.ThemePreferences
 import com.example.viewmodel.VpnViewModel
 
 class MainActivity : ComponentActivity() {
@@ -33,11 +41,22 @@ class MainActivity : ComponentActivity() {
         }
 
         val database = AppDatabase.getDatabase(applicationContext)
+        ThemePreferences.init(applicationContext)
+        LanguagePreferences.init(applicationContext)
         val viewModelFactory = VpnViewModel.Factory(database)
         val viewModel = ViewModelProvider(this, viewModelFactory)[VpnViewModel::class.java]
 
         setContent {
-            MyApplicationTheme {
+            val themeMode by viewModel.appThemeMode.collectAsState()
+            val appLanguage by viewModel.appLanguage.collectAsState()
+            val appStrings = remember(appLanguage) { AppStrings.get(appLanguage) }
+            val layoutDirection = if (appLanguage.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+            CompositionLocalProvider(
+                LocalLayoutDirection provides layoutDirection,
+                LocalAppStrings provides appStrings
+            ) {
+                MyApplicationTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -91,4 +110,5 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
 }
