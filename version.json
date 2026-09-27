@@ -1,8 +1,8 @@
 {
-  "latest_version_code": 8,
-  "latest_version_name": "1.6.0",
+  "latest_version_code": 10,
+  "latest_version_name": "1.8.0",
   "is_force_update": false,
-  "changelog": "• افزودن و مسیردهی هوشمند پروتکل پرسرعت VLESS WebSocket اختصاصی برای اپراتورهای ایرانسل و رایتل\n• اتصال فوق‌العاده پایدار و دور زدن محدودیت‌های شدید اینترنت\n• هماهنگ‌سازی و دریافت دقیق تاریخ انقضای اشتراک از پنل شاهان\n• ارتقا و بهینه‌سازی سرعت تونل و پایداری اتصال",
-  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.6.0/gmbnet.apk",
-  "release_date": "1403/12/23"
+  "changelog": "• قابلیت ورود سریع با کد اختصاصی / لایسنس (بدون نیاز به یوزرنیم و پسورد)\n• دریافت و اتصال خودکار به کانفیگ‌های پرسرعت اختصاصی V2Ray\n• ذخیره‌سازی نشست و عدم نیاز به لاگین مجدد در باز شدن‌های بعدی\n• بهینه‌سازی و خلوت‌تر شدن رابط کاربری صفحه اصلی\n• افزایش سرعت و پایداری برقراری اتصال",
+  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.8.0/gmbnet.apk",
+  "release_date": "1405/07/06"
 }
