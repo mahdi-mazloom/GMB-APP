@@ -1,8 +1,8 @@
 {
-  "latest_version_code": 10,
-  "latest_version_name": "1.8.0",
+  "latest_version_code": 11,
+  "latest_version_name": "1.8.1",
   "is_force_update": false,
-  "changelog": "• قابلیت ورود سریع با کد اختصاصی / لایسنس (بدون نیاز به یوزرنیم و پسورد)\n• دریافت و اتصال خودکار به کانفیگ‌های پرسرعت اختصاصی V2Ray\n• ذخیره‌سازی نشست و عدم نیاز به لاگین مجدد در باز شدن‌های بعدی\n• بهینه‌سازی و خلوت‌تر شدن رابط کاربری صفحه اصلی\n• افزایش سرعت و پایداری برقراری اتصال",
-  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.8.0/gmbnet.apk",
-  "release_date": "1405/07/06"
+  "changelog": "• رفع کامل مشکل گیر کردن در حالت اتصال مجدد (RETRYING) و عدم توقف اتصال\n• اضافه شدن دکمه لغو و توقف آنی اتصال در صفحه اصلی\n• اضافه شدن دکمه «قطع اتصال» مستقیم در اعلان نوار وضعیت اندروید\n• تعیین سقف ۲۰ تلاش برای اتصال خودکار جهت بهینه‌سازی مصرف باتری و رم\n• بهبود پایداری لایه شبکه، سوکت‌ها و پروتکل‌های امن",
+  "download_url": "https://github.com/mahdi-mazloom/GMB-APP/releases/download/v1.8.1/gmbnet.apk",
+  "release_date": "1405/07/09"
 }
